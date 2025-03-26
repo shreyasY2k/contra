@@ -1,0 +1,215 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    user-select: none;
+}
+
+body {
+    overflow: hidden;
+    font-family: 'Arial', sans-serif;
+    background-color: #000;
+}
+
+#loading-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    color: white;
+}
+
+.loading-content {
+    text-align: center;
+}
+
+.loading-content h1 {
+    font-size: 4rem;
+    color: red;
+    text-shadow: 0 0 10px rgba(255, 0, 0, 0.7);
+    margin-bottom: 20px;
+}
+
+.progress-bar {
+    width: 300px;
+    height: 20px;
+    background-color: #333;
+    border-radius: 10px;
+    margin: 20px auto;
+    overflow: hidden;
+}
+
+#progress {
+    height: 100%;
+    width: 0%;
+    background-color: red;
+    transition: width 0.3s;
+}
+
+#game-ui {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    color: white;
+    font-size: 1.2rem;
+    text-shadow: 1px 1px 3px #000;
+    z-index: 100;
+}
+
+#game-ui div {
+    margin-bottom: 10px;
+}
+
+/* Stamina bar styles */
+#stamina-bar {
+    width: 200px;
+    height: 10px;
+    background-color: #333;
+    border-radius: 5px;
+    overflow: hidden;
+    margin-top: 5px;
+}
+
+#stamina-progress {
+    height: 100%;
+    width: 100%;
+    background-color: #4CAF50;
+    transition: width 0.2s;
+}
+
+/* Minimap styles */
+#minimap-container {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 180px;
+    height: 180px;
+    background-color: rgba(0,0,0,0.5);
+    border: 2px solid white;
+    border-radius: 50%;
+    overflow: hidden;
+    z-index: 100;
+}
+
+#minimap {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+#mobile-controls {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    display: none;
+    z-index: 100;
+}
+
+#joystick-area {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    width: 120px;
+    height: 120px;
+}
+
+#joystick-base {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#joystick-thumb {
+    width: 50%;
+    height: 50%;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.6);
+}
+
+#action-buttons {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    width: 150px;
+    justify-content: flex-end;
+}
+
+#action-buttons button {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: rgba(255, 0, 0, 0.6);
+    border: none;
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+#sprint-button {
+    background: rgba(0, 255, 0, 0.6) !important;
+}
+
+#game-over {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 200;
+    color: white;
+}
+
+#game-over h2 {
+    font-size: 4rem;
+    color: red;
+    margin-bottom: 20px;
+}
+
+#restart-button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    background-color: red;
+    color: white;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+}
+
+@media (max-width: 768px) {
+    #mobile-controls {
+        display: block;
+    }
+    
+    #minimap-container {
+        width: 120px;
+        height: 120px;
+        bottom: 150px;
+    }
+    
+    #game-ui {
+        font-size: 0.9rem;
+    }
+    
+    #stamina-bar {
+        width: 150px;
+    }
+}
