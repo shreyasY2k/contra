@@ -321,12 +321,12 @@ class ContraGame {
             }
         }, 2000);
         
-        // Vehicle spawning
+        // Vehicle spawning - increased frequency and closer to player
         this.vehicleSpawnInterval = setInterval(() => {
-            if (!this.isPaused && !this.isGameOver && Math.random() < 0.3) {
+            if (!this.isPaused && !this.isGameOver) {
                 this.spawnVehicle();
             }
-        }, 15000);
+        }, 7000); // Reduced from 15000 to 7000ms
         
         // Weapon pickup spawning
         this.weaponSpawnInterval = setInterval(() => {
@@ -397,12 +397,200 @@ class ContraGame {
         const vehicleTypeIndex = Math.floor(Math.random() * this.vehicleTypes.length);
         const vehicleType = this.vehicleTypes[vehicleTypeIndex].type;
         
-        // Random position
-        const spawnIndex = Math.floor(Math.random() * this.spawnPoints.length);
-        const spawnPoint = this.spawnPoints[spawnIndex];
+        // Random position - closer to player for easier access
+        let spawnPoint;
+        const playerPos = this.player.mesh.position;
+        
+        // Create a position that's relatively close to the player (15-25 units away)
+        const angle = Math.random() * Math.PI * 2; // Random angle
+        const distance = 15 + Math.random() * 10; // Distance between 15-25 units
+        
+        spawnPoint = {
+            x: playerPos.x + Math.cos(angle) * distance,
+            y: vehicleType === 'helicopter' ? 5 : 0, // Height based on type
+            z: playerPos.z + Math.sin(angle) * distance
+        };
         
         const vehicle = new Vehicle(this.scene, vehicleType, spawnPoint);
+        
+        // Add a visual indicator for vehicles
+        this.createVehicleIndicator(vehicle);
+        
         this.vehicles.push(vehicle);
+        
+        // Show hint message about vehicle
+        this.showMessage(`New ${vehicleType} available! Press E to enter.`, 3000);
+    }
+    
+    createVehicleIndicator(vehicle) {
+        // Create an arrow pointing down at the vehicle
+        const arrowGeometry = new THREE.ConeGeometry(0.5, 1, 8);
+        const arrowMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x00ff00,
+            transparent: true,
+            opacity: 0.8
+        });
+        
+        const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
+        arrow.rotation.x = Math.PI; // Point downward
+        
+        // Position above vehicle
+        const height = vehicle.type === 'helicopter' ? 8 : 4;
+        arrow.position.y = height;
+        
+        // Add to vehicle
+        vehicle.indicator = arrow;
+        vehicle.mesh.add(arrow);
+        
+        // Add pulsing animation
+        vehicle.indicatorPulse = 0;
+    }
+    
+    showMessage(text, duration = 3000) {
+        // Check if message container exists, create if not
+        let messageContainer = document.getElementById('message-container');
+        if (!messageContainer) {
+            messageContainer = document.createElement('div');
+            messageContainer.id = 'message-container';
+            messageContainer.style.position = 'absolute';
+            messageContainer.style.top = '100px';
+            messageContainer.style.left = '50%';
+            messageContainer.style.transform = 'translateX(-50%)';
+            messageContainer.style.color = 'white';
+            messageContainer.style.fontSize = '20px';
+            messageContainer.style.textAlign = 'center';
+            messageContainer.style.textShadow = '2px 2px 4px rgba(0,0,0,0.7)';
+            messageContainer.style.zIndex = '1000';
+            document.body.appendChild(messageContainer);
+        }
+        
+        // Create message element
+        const messageElement = document.createElement('div');
+        messageElement.textContent = text;
+        messageElement.style.backgroundColor = 'rgba(0,0,0,0.5)';
+        messageElement.style.padding = '10px 15px';
+        messageElement.style.borderRadius = '5px';
+        messageElement.style.marginBottom = '10px';
+        messageElement.style.opacity = '1';
+        messageElement.style.transition = 'opacity 0.5s';
+        
+        // Add to container
+        messageContainer.appendChild(messageElement);
+        
+        // Remove after duration
+        setTimeout(() => {
+            messageElement.style.opacity = '0';
+            setTimeout(() => {
+                if (messageContainer.contains(messageElement)) {
+                    messageContainer.removeChild(messageElement);
+                }
+            }, 500);
+        }, duration);
+    }
+    
+    toggleCameraView() {
+        if (!this.player) return;
+        
+        // Toggle between three view modes
+        if (!this.cameraMode) {
+            this.cameraMode = 'tpp-far'; // Default third person far
+        }
+        
+        switch(this.cameraMode) {
+            case 'tpp-far':
+                this.cameraMode = 'tpp-close';
+                this.showMessage("Camera: Third Person Close", 1500);
+                break;
+            case 'tpp-close':
+                this.cameraMode = 'fpp';
+                this.showMessage("Camera: First Person", 1500);
+                break;
+            case 'fpp':
+                this.cameraMode = 'tpp-far';
+                this.showMessage("Camera: Third Person Far", 1500);
+                break;
+        }
+    }
+    
+    updateCameraView() {
+        if (!this.player || !this.cameraMode) return;
+        
+        let targetPos, cameraOffset;
+        
+        if (this.player.inVehicle) {
+            targetPos = this.player.currentVehicle.mesh.position.clone();
+            
+            // Adjust camera based on view mode and vehicle type
+            switch(this.cameraMode) {
+                case 'tpp-far':
+                    cameraOffset = new THREE.Vector3(0, 5, 10);
+                    break;
+                case 'tpp-close':
+                    cameraOffset = new THREE.Vector3(0, 3, 6);
+                    break;
+                case 'fpp':
+                    // First person view from vehicle cockpit
+                    const vehicleType = this.player.currentVehicle.type;
+                    if (vehicleType === 'helicopter') {
+                        cameraOffset = new THREE.Vector3(0, 1.5, -0.5);
+                    } else if (vehicleType === 'tank') {
+                        cameraOffset = new THREE.Vector3(0, 1.8, 0);
+                    } else {
+                        cameraOffset = new THREE.Vector3(0, 1.2, 0);
+                    }
+                    break;
+            }
+        } else {
+            targetPos = this.player.mesh.position.clone();
+            
+            // Adjust camera based on view mode
+            switch(this.cameraMode) {
+                case 'tpp-far':
+                    cameraOffset = new THREE.Vector3(0, 5, 8);
+                    break;
+                case 'tpp-close':
+                    cameraOffset = new THREE.Vector3(0, 3, 4);
+                    break;
+                case 'fpp':
+                    cameraOffset = new THREE.Vector3(0, 1.7, 0.1); // Slightly forward from head
+                    break;
+            }
+        }
+        
+        // Apply rotation to camera offset for first person view
+        if (this.cameraMode === 'fpp') {
+            // Get player or vehicle rotation
+            const rotation = this.player.inVehicle 
+                ? this.player.currentVehicle.rotation 
+                : this.player.rotation;
+            
+            // Apply rotation to offset
+            const rotMatrix = new THREE.Matrix4().makeRotationY(rotation);
+            cameraOffset.applyMatrix4(rotMatrix);
+        }
+        
+        // Set camera position
+        this.camera.position.copy(targetPos).add(cameraOffset);
+        
+        // Set camera look target
+        if (this.cameraMode === 'fpp') {
+            // In first person, look in the direction of movement
+            const lookAtPoint = targetPos.clone();
+            
+            // Get forward direction vector based on rotation
+            const forwardVector = new THREE.Vector3(0, 0, -10);
+            const rotation = this.player.inVehicle 
+                ? this.player.currentVehicle.rotation 
+                : this.player.rotation;
+                
+            forwardVector.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotation);
+            lookAtPoint.add(forwardVector);
+            
+            this.camera.lookAt(lookAtPoint);
+        } else {
+            // In third person, look at player/vehicle
+            this.camera.lookAt(targetPos);
+        }
     }
     
     initControls() {
@@ -423,6 +611,17 @@ class ContraGame {
             // Weapon cycling with Q key
             if (e.code === 'KeyQ' && this.player) {
                 this.player.cycleWeapon();
+            }
+            
+            // Camera view toggle with V key
+            if (e.code === 'KeyV') {
+                this.toggleCameraView();
+                // Reset mouse target when switching views
+                if (this.mouseTarget) {
+                    if (this.player) {
+                        this.player.setMouseTarget(this.mouse, this.camera);
+                    }
+                }
             }
         });
         
@@ -660,6 +859,12 @@ class ContraGame {
         this.updatePlayerControls();
         this.player.update(deltaTime);
         
+        // Update camera position based on view mode
+        this.updateCameraView();
+        
+        // Update vehicle indicators
+        this.updateVehicleIndicators(deltaTime);
+        
         // Update enemies
         for (let i = this.enemies.length - 1; i >= 0; i--) {
             const enemy = this.enemies[i];
@@ -731,7 +936,8 @@ class ContraGame {
             
             // Check bullet collisions with enemies
             for (const enemy of this.enemies) {
-                if (bullet.isFromPlayer && bullet.checkCollision(enemy.mesh)) {
+                // Use the improved collision detection from the enemy class
+                if (bullet.isFromPlayer && enemy.checkCollision(bullet)) {
                     enemy.takeDamage(bullet.damage);
                     
                     // Add hit effect
@@ -810,6 +1016,24 @@ class ContraGame {
                 this.updateHealth();
             }
         }
+    }
+    
+    checkBulletCollision(bullet, target) {
+        // Get bullet position and target position
+        const bulletPos = bullet.mesh.position;
+        const targetPos = target.mesh.position;
+        
+        // Get collision radius based on target type
+        let collisionRadius = 1; // Default
+        
+        if (target.type === 'helicopter') {
+            collisionRadius = 2; // Larger collision area for helicopters
+        } else if (target.type === 'tank') {
+            collisionRadius = 2; // Larger for tanks too
+        }
+        
+        // Check distance
+        return bulletPos.distanceTo(targetPos) < collisionRadius;
     }
     
     updateWeaponPickups(deltaTime) {
@@ -1013,6 +1237,25 @@ class ContraGame {
             if (!isAlive) {
                 this.scene.remove(particle.mesh);
                 this.particles.splice(i, 1);
+            }
+        }
+    }
+    
+    updateVehicleIndicators(deltaTime) {
+        // Make vehicle indicators pulse and follow the vehicle
+        for (const vehicle of this.vehicles) {
+            if (vehicle.indicator) {
+                // Pulsing effect
+                vehicle.indicatorPulse = (vehicle.indicatorPulse || 0) + deltaTime * 5;
+                const scale = 1 + 0.2 * Math.sin(vehicle.indicatorPulse);
+                vehicle.indicator.scale.set(scale, scale, scale);
+                
+                // Rotation for attention
+                vehicle.indicator.rotation.y += deltaTime * 2;
+                
+                // Hide indicator if player is close or the vehicle is occupied
+                const distance = this.player.mesh.position.distanceTo(vehicle.mesh.position);
+                vehicle.indicator.visible = !vehicle.isOccupied && distance > 5;
             }
         }
     }

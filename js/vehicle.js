@@ -217,12 +217,33 @@ export class Vehicle {
             );
             body.position.y = 0.3;
             
+            // Add distinctive jeep details
+            const hood = new THREE.Mesh(
+                new THREE.BoxGeometry(1.5, 0.2, 0.8),
+                new THREE.MeshLambertMaterial({ color: this.color })
+            );
+            hood.position.set(0, 0.3, 1.4);
+            
             const top = new THREE.Mesh(
                 new THREE.BoxGeometry(1.3, 0.5, 1.5),
                 new THREE.MeshLambertMaterial({ color: 0x333333 })
             );
             top.position.y = 0.8;
             top.position.z = -0.5;
+            
+            // Create headlights
+            const headlightGeometry = new THREE.SphereGeometry(0.15, 8, 8);
+            const headlightMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xffffcc,
+                emissive: 0xffffcc,
+                emissiveIntensity: 0.5
+            });
+            
+            const headlightLeft = new THREE.Mesh(headlightGeometry, headlightMaterial);
+            headlightLeft.position.set(-0.5, 0.3, 1.6);
+            
+            const headlightRight = new THREE.Mesh(headlightGeometry, headlightMaterial);
+            headlightRight.position.set(0.5, 0.3, 1.6);
             
             // Create wheels
             const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
@@ -246,7 +267,7 @@ export class Vehicle {
             
             this.movingParts.wheels = [wheelFL, wheelFR, wheelBL, wheelBR];
             
-            vehicleModel.add(body, top, wheelFL, wheelFR, wheelBL, wheelBR);
+            vehicleModel.add(body, hood, top, headlightLeft, headlightRight, wheelFL, wheelFR, wheelBL, wheelBR);
         } else if (this.type === 'tank') {
             // Create a tank shape
             const body = new THREE.Mesh(
@@ -299,38 +320,85 @@ export class Vehicle {
             );
             body.rotation.z = Math.PI / 2;
             
+            // Enhanced cockpit
             const cockpit = new THREE.Mesh(
                 new THREE.SphereGeometry(1, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2),
-                new THREE.MeshLambertMaterial({ color: 0x87CEFA, transparent: true, opacity: 0.7 })
+                new THREE.MeshLambertMaterial({ 
+                    color: 0x87CEFA, 
+                    transparent: true, 
+                    opacity: 0.7,
+                    emissive: 0x3366ff,
+                    emissiveIntensity: 0.2
+                })
             );
             cockpit.position.set(0, 0.5, 1.5);
             cockpit.rotation.x = -Math.PI / 2;
             
+            // Add running lights
+            const lightGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+            
+            // Red blinking light on top
+            const redLight = new THREE.Mesh(
+                lightGeometry,
+                new THREE.MeshBasicMaterial({ 
+                    color: 0xff0000, 
+                    emissive: 0xff0000,
+                    emissiveIntensity: 0.5
+                })
+            );
+            redLight.position.set(0, 1.8, -0.5);
+            
+            // Green navigation light on right
+            const greenLight = new THREE.Mesh(
+                lightGeometry,
+                new THREE.MeshBasicMaterial({ 
+                    color: 0x00ff00, 
+                    emissive: 0x00ff00,
+                    emissiveIntensity: 0.5
+                })
+            );
+            greenLight.position.set(1.0, 0, -0.5);
+            
+            // tail
             const tail = new THREE.Mesh(
                 new THREE.CylinderGeometry(0.3, 0.5, 3, 8),
                 new THREE.MeshLambertMaterial({ color: this.color })
             );
             tail.position.set(0, 0, -2);
             
+            // Enhanced rotors with transparency
             const mainRotor = new THREE.Group();
             
             const blade1 = new THREE.Mesh(
                 new THREE.BoxGeometry(4, 0.1, 0.5),
-                new THREE.MeshLambertMaterial({ color: 0xAAAAAA })
+                new THREE.MeshLambertMaterial({ 
+                    color: 0xAAAAAA,
+                    transparent: true,
+                    opacity: 0.8
+                })
             );
             
             const blade2 = new THREE.Mesh(
                 new THREE.BoxGeometry(4, 0.1, 0.5),
-                new THREE.MeshLambertMaterial({ color: 0xAAAAAA })
+                new THREE.MeshLambertMaterial({ 
+                    color: 0xAAAAAA,
+                    transparent: true,
+                    opacity: 0.8
+                })
             );
             blade2.rotation.y = Math.PI / 2;
             
             mainRotor.add(blade1, blade2);
             mainRotor.position.set(0, 1.5, 0);
             
+            // Tail rotor with transparency
             const tailRotor = new THREE.Mesh(
                 new THREE.BoxGeometry(1, 0.1, 0.2),
-                new THREE.MeshLambertMaterial({ color: 0xAAAAAA })
+                new THREE.MeshLambertMaterial({ 
+                    color: 0xAAAAAA,
+                    transparent: true,
+                    opacity: 0.8
+                })
             );
             tailRotor.position.set(0.5, 0, -3.5);
             tailRotor.rotation.z = Math.PI / 2;
@@ -338,7 +406,29 @@ export class Vehicle {
             this.movingParts.rotor = mainRotor;
             this.tailRotor = tailRotor;
             
-            vehicleModel.add(body, cockpit, tail, mainRotor, tailRotor);
+            // Weapon mounts
+            const leftWeaponMount = new THREE.Mesh(
+                new THREE.BoxGeometry(0.2, 0.2, 1),
+                new THREE.MeshLambertMaterial({ color: 0x333333 })
+            );
+            leftWeaponMount.position.set(-1.2, -0.5, 0.5);
+            
+            const rightWeaponMount = new THREE.Mesh(
+                new THREE.BoxGeometry(0.2, 0.2, 1),
+                new THREE.MeshLambertMaterial({ color: 0x333333 })
+            );
+            rightWeaponMount.position.set(1.2, -0.5, 0.5);
+            
+            vehicleModel.add(body, cockpit, tail, mainRotor, tailRotor, 
+                             redLight, greenLight, leftWeaponMount, rightWeaponMount);
+                             
+            // Add blinking light animation
+            this.lights = {
+                red: redLight,
+                green: greenLight,
+                blinkRate: 0.5,
+                lastBlink: 0
+            };
         }
         
         this.detailedModel = vehicleModel;
@@ -539,10 +629,28 @@ export class Vehicle {
     }
     
     getWeaponPosition() {
-        const weaponWorldPosition = new THREE.Vector3();
-        this.weapon.getWorldPosition(weaponWorldPosition);
-        
-        return weaponWorldPosition;
+        if (this.type === 'helicopter') {
+            // Return position from one of the weapon mounts
+            const weaponOffsets = [
+                new THREE.Vector3(-1.2, -0.5, 0.5), // Left mount
+                new THREE.Vector3(1.2, -0.5, 0.5)   // Right mount
+            ];
+            
+            // Alternate between left and right
+            const offset = weaponOffsets[Math.floor(Date.now() / 250) % 2];
+            
+            // Apply vehicle rotation and position
+            const worldPosition = new THREE.Vector3();
+            offset.applyQuaternion(this.vehicleGroup.quaternion);
+            worldPosition.addVectors(this.mesh.position, offset);
+            
+            return worldPosition;
+        } else {
+            // Use default weapon position for other vehicles
+            const weaponWorldPosition = new THREE.Vector3();
+            this.weapon.getWorldPosition(weaponWorldPosition);
+            return weaponWorldPosition;
+        }
     }
     
     getDirection() {
@@ -582,6 +690,16 @@ export class Vehicle {
                     const directions = ['forward', 'backward', 'left', 'right'];
                     this.move(directions[Math.floor(Math.random() * directions.length)]);
                 }
+            }
+        }
+        
+        // Update helicopter lights
+        if (this.type === 'helicopter' && this.lights) {
+            this.lights.lastBlink += deltaTime;
+            
+            if (this.lights.lastBlink > this.lights.blinkRate) {
+                this.lights.lastBlink = 0;
+                this.lights.red.visible = !this.lights.red.visible;
             }
         }
     }

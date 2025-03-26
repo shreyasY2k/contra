@@ -331,6 +331,22 @@ export class Enemy {
         }
     }
     
+    checkCollision(bullet, collisionRadius = 1) {
+        // Get bullet position and enemy position
+        const bulletPos = bullet.mesh.position;
+        const enemyPos = this.mesh.position;
+        
+        // Adjust collision radius based on enemy type
+        if (this.type === 'helicopter') {
+            collisionRadius = 2.5; // Much larger collision area for helicopters
+        } else if (this.type === 'tank') {
+            collisionRadius = 2; // Larger for tanks too
+        }
+        
+        // Check distance
+        return bulletPos.distanceTo(enemyPos) < collisionRadius;
+    }
+
     moveTowardsPlayer() {
         let targetPosition;
         
@@ -344,13 +360,32 @@ export class Enemy {
         const direction = new THREE.Vector3();
         direction.subVectors(targetPosition, this.mesh.position).normalize();
         
-        // Don't change Y position for helicopters
+        // Adjust movement for helicopter
         if (this.type === 'helicopter') {
+            // Helicopters maintain altitude
             direction.y = 0;
+            
+            // Helicopters move faster and stay at a distance for attacking
+            const distanceToPlayer = this.mesh.position.distanceTo(targetPosition);
+            
+            if (distanceToPlayer < this.attackRange * 0.8) {
+                // Too close, back up slightly
+                direction.negate().multiplyScalar(this.speed * 0.5);
+            } else if (distanceToPlayer > this.attackRange * 0.9) {
+                // Too far, move towards player
+                direction.multiplyScalar(this.speed);
+            } else {
+                // At good distance, circle around player
+                const circlingDirection = new THREE.Vector3(direction.z, 0, -direction.x);
+                direction.copy(circlingDirection).multiplyScalar(this.speed * 0.8);
+            }
+        } else {
+            // Ground units move directly towards player
+            direction.multiplyScalar(this.speed);
         }
         
-        // Move towards player
-        this.mesh.position.add(direction.multiplyScalar(this.speed));
+        // Apply movement
+        this.mesh.position.add(direction);
         
         // Update the group position to match the hitbox position
         if (this.enemyGroup) {
@@ -393,14 +428,35 @@ export class Enemy {
         
         // Create visible bullet/projectile
         const bulletGeometry = new THREE.SphereGeometry(0.1);
-        const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const bulletMaterial = new THREE.MeshBasicMaterial({ 
+            color: this.type === 'helicopter' ? 0xff5500 : 0xff0000,
+            emissive: this.type === 'helicopter' ? 0xff5500 : 0xff0000,
+            emissiveIntensity: 0.5
+        });
+        
         const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
         
-        // Set starting position at enemy
+        // Set starting position at enemy with offset
         bullet.position.copy(this.mesh.position);
-        bullet.position.y += 0.5; // Adjust for height
         
-        // Calculate direction to player
+        // Adjust starting position based on enemy type
+        if (this.type === 'helicopter') {
+            bullet.position.y -= 0.5; // Shoot from bottom
+            
+            // Add muzzle flash effect for helicopter
+            const flash = new THREE.PointLight(0xff5500, 5, 3);
+            flash.position.copy(bullet.position);
+            this.scene.add(flash);
+            
+            // Remove flash after a short time
+            setTimeout(() => {
+                this.scene.remove(flash);
+            }, 100);
+        } else {
+            bullet.position.y += 0.5; // Adjust for soldier height
+        }
+        
+        // Calculate direction to player with slight inaccuracy
         let targetPosition;
         if (this.player.inVehicle) {
             targetPosition = this.player.currentVehicle.mesh.position.clone();
@@ -408,17 +464,25 @@ export class Enemy {
             targetPosition = this.player.mesh.position.clone();
         }
         
+        // Add some randomness to aiming (miss sometimes)
+        const inaccuracy = this.type === 'helicopter' ? 0.1 : 0.3;
+        targetPosition.x += (Math.random() - 0.5) * inaccuracy * this.attackRange;
+        targetPosition.y += (Math.random() - 0.5) * inaccuracy * this.attackRange;
+        targetPosition.z += (Math.random() - 0.5) * inaccuracy * this.attackRange;
+        
         const direction = new THREE.Vector3().subVectors(targetPosition, bullet.position).normalize();
         
         // Add to scene
         this.scene.add(bullet);
         
-        // Store bullet in the game's bullets array (need to be accessed from the main game)
+        // Store bullet in the game's bullets array
+        const bulletSpeed = this.type === 'helicopter' ? 0.7 : 0.5;
+        
         if (window.game && window.game.bullets) {
             window.game.bullets.push({
                 mesh: bullet,
                 direction: direction,
-                speed: 0.5,
+                speed: bulletSpeed,
                 damage: this.damage,
                 range: this.attackRange * 1.5,
                 isFromPlayer: false,
@@ -436,13 +500,6 @@ export class Enemy {
             setTimeout(() => {
                 this.scene.remove(bullet);
             }, 2000);
-            
-            // Direct damage to player (simplified)
-            if (this.player.inVehicle) {
-                this.player.currentVehicle.takeDamage(this.damage);
-            } else {
-                this.player.takeDamage(this.damage);
-            }
         }
     }
     

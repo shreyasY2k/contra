@@ -16,7 +16,8 @@ export class Weapon {
                 this.bulletColor = 0xffff00;
                 this.sound = 'pistol-shot.mp3';
                 this.spread = 0.02; // accuracy - lower is more accurate
-                this.bulletCount = 1; // bullets per shot
+                this.bulletCount = 10; // bullets per shot
+                this.shotsPerFire = 20; // Increased from 1 to 2
                 break;
             case 'rifle':
                 this.bulletSpeed = 1.2;
@@ -25,6 +26,7 @@ export class Weapon {
                 this.sound = 'rifle-shot.mp3';
                 this.spread = 0.05;
                 this.bulletCount = 1;
+                this.shotsPerFire = 3; // Burst fire - 3 bullets per click
                 break;
             case 'rocket':
                 this.bulletSpeed = 0.6;
@@ -34,6 +36,7 @@ export class Weapon {
                 this.spread = 0.01;
                 this.bulletCount = 1;
                 this.explosive = true;
+                this.shotsPerFire = 1;
                 break;
             case 'shotgun':
                 this.bulletSpeed = 0.7;
@@ -41,7 +44,8 @@ export class Weapon {
                 this.bulletColor = 0xffcc00;
                 this.sound = 'shotgun-blast.mp3';
                 this.spread = 0.2;
-                this.bulletCount = 8;
+                this.bulletCount = 8; // 8 pellets per shot
+                this.shotsPerFire = 1;
                 break;
             case 'laser':
                 this.bulletSpeed = 1.5;
@@ -50,6 +54,7 @@ export class Weapon {
                 this.sound = 'laser-fire.mp3';
                 this.spread = 0;
                 this.bulletCount = 1;
+                this.shotsPerFire = 5; // Rapid fire - 5 shots per click
                 break;
             default:
                 this.bulletSpeed = 0.8;
@@ -58,6 +63,7 @@ export class Weapon {
                 this.sound = 'pistol-shot.mp3';
                 this.spread = 0.02;
                 this.bulletCount = 1;
+                this.shotsPerFire = 1;
         }
     }
     
@@ -80,6 +86,33 @@ export class Weapon {
         }
         
         return false;
+    }
+    
+    createBullets(scene, position, direction) {
+        const bullets = [];
+        
+        // Create multiple bullets per shot based on weapon type
+        for (let shot = 0; shot < this.shotsPerFire; shot++) {
+            // Add slight variation between multiple shots
+            const shotDirection = direction.clone();
+            if (this.shotsPerFire > 1) {
+                shotDirection.x += (Math.random() - 0.5) * 0.02;
+                shotDirection.y += (Math.random() - 0.5) * 0.02;
+                shotDirection.z += (Math.random() - 0.5) * 0.02;
+                shotDirection.normalize();
+            }
+            
+            // Create individual bullets (for shotgun spread, etc)
+            for (let i = 0; i < this.bulletCount; i++) {
+                const bullet = this.createBullet(scene, position.clone(), shotDirection.clone());
+                bullets.push(bullet);
+            }
+            
+            // Use ammo for each shot
+            this.useAmmo();
+        }
+        
+        return bullets;
     }
     
     createBullet(scene, position, direction) {

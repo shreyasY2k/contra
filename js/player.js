@@ -32,7 +32,7 @@ export class Player {
         this.staminaRegenRate = 15; // Per second
         this.staminaUseRate = 25;   // Per second
         
-        // Current vehicle
+        // Current vehicleadswsS
         this.currentVehicle = null;
         this.inVehicle = false;
         
@@ -371,11 +371,6 @@ export class Player {
                 return;
             }
             
-            // Use ammo (infinite ammo is handled in the Weapon class)
-            if (!this.currentWeapon.useAmmo()) {
-                return;
-            }
-            
             this.lastShootTime = now;
             
             // Play shooting animation
@@ -387,6 +382,13 @@ export class Player {
                 // Get firing position and direction from vehicle
                 spawnPoint = this.currentVehicle.getWeaponPosition();
                 direction = this.currentVehicle.getDirection();
+                
+                // If a target position is provided, adjust aim direction
+                if (targetPosition) {
+                    direction = new THREE.Vector3()
+                        .subVectors(targetPosition, spawnPoint)
+                        .normalize();
+                }
             } else {
                 // Calculate gun position offset from player center
                 const gunOffset = new THREE.Vector3(0.3, 0.5, 0.5);
@@ -410,9 +412,9 @@ export class Player {
                 }
             }
             
-            // Create the bullet using the weapon's properties
-            const bullet = this.currentWeapon.createBullet(scene, spawnPoint, direction);
-            bullets.push(bullet);
+            // Create the bullets using the weapon's createBullets method
+            const newBullets = this.currentWeapon.createBullets(scene, spawnPoint, direction);
+            bullets.push(...newBullets);
             
             // Update ammo display
             this.updateAmmoDisplay();
