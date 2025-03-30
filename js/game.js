@@ -12,7 +12,13 @@ class Game {
       this.environmentObjects = [];
       this.isGameActive = false;
       this.currentCameraMode = 'farTPP'; // 'farTPP', 'closeTPP', 'FPS'
-      this.mapSize = 500; // Map size (square)
+      
+      // Detect mobile device for smaller map size
+      this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      // Set map size based on device type
+      this.mapSize = this.isMobile ? 250 : 500; // Half the size on mobile
+      
       this.minimap = null;
       
       // Camera control variables
@@ -140,12 +146,74 @@ class Game {
       // Create environment objects (buildings, trees, rocks)
       const environment = new Environment(this);
       environment.createObjects();
+      
+      // Add boundaries (optional, to keep player within the map)
+      this.addBoundaries();
+    }
+    
+    addBoundaries() {
+      const boundaryHeight = 5;
+      const boundaryThickness = 2;
+      const halfMapSize = this.mapSize / 2;
+      
+      // Material for boundaries
+      const boundaryMaterial = new THREE.MeshStandardMaterial({
+        color: 0x8B4513, // Brown
+        roughness: 0.8
+      });
+      
+      // North wall
+      const northWall = new THREE.Mesh(
+        new THREE.BoxGeometry(this.mapSize + boundaryThickness * 2, boundaryHeight, boundaryThickness),
+        boundaryMaterial
+      );
+      northWall.position.set(0, boundaryHeight / 2, -halfMapSize - boundaryThickness / 2);
+      northWall.castShadow = true;
+      northWall.receiveShadow = true;
+      this.scene.add(northWall);
+      this.environmentObjects.push(northWall);
+      
+      // South wall
+      const southWall = new THREE.Mesh(
+        new THREE.BoxGeometry(this.mapSize + boundaryThickness * 2, boundaryHeight, boundaryThickness),
+        boundaryMaterial
+      );
+      southWall.position.set(0, boundaryHeight / 2, halfMapSize + boundaryThickness / 2);
+      southWall.castShadow = true;
+      southWall.receiveShadow = true;
+      this.scene.add(southWall);
+      this.environmentObjects.push(southWall);
+      
+      // East wall
+      const eastWall = new THREE.Mesh(
+        new THREE.BoxGeometry(boundaryThickness, boundaryHeight, this.mapSize),
+        boundaryMaterial
+      );
+      eastWall.position.set(halfMapSize + boundaryThickness / 2, boundaryHeight / 2, 0);
+      eastWall.castShadow = true;
+      eastWall.receiveShadow = true;
+      this.scene.add(eastWall);
+      this.environmentObjects.push(eastWall);
+      
+      // West wall
+      const westWall = new THREE.Mesh(
+        new THREE.BoxGeometry(boundaryThickness, boundaryHeight, this.mapSize),
+        boundaryMaterial
+      );
+      westWall.position.set(-halfMapSize - boundaryThickness / 2, boundaryHeight / 2, 0);
+      westWall.castShadow = true;
+      westWall.receiveShadow = true;
+      this.scene.add(westWall);
+      this.environmentObjects.push(westWall);
     }
   
     setupEnemies() {
       // Create enemy spawner that will add enemies regularly
       this.enemySpawnInterval = setInterval(() => {
-        if (this.enemies.length < 10 && this.isGameActive) {
+        // Adjust enemy count based on device type
+        const maxEnemies = this.isMobile ? 5 : 10; // Fewer enemies on mobile
+        
+        if (this.enemies.length < maxEnemies && this.isGameActive) {
           const enemyTypes = ['soldier', 'tank', 'jeep'];
           const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
           const enemy = new Enemy(this, randomType);
@@ -158,7 +226,7 @@ class Game {
           );
           
           // Ensure enemy is not too close to player
-          while (position.distanceTo(this.player.object.position) < 50) {
+          while (position.distanceTo(this.player.object.position) < (this.isMobile ? 30 : 50)) {
             position = new THREE.Vector3(
               Math.random() * this.mapSize - this.mapSize / 2,
               0,
@@ -170,7 +238,7 @@ class Game {
           this.enemies.push(enemy);
           this.scene.add(enemy.object);
         }
-      }, 3000); // Spawn enemy every 3 seconds
+      }, this.isMobile ? 5000 : 3000); // Slower enemy spawn rate on mobile
     }
   
     setupVehicles() {

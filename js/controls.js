@@ -314,12 +314,11 @@ class Controls {
       // Show mobile controls
       document.getElementById('mobile-controls').classList.remove('hidden');
       
-      // Set up the joystick
+      // Set up the joystick for movement (WASD equivalent)
       const joystickBase = document.getElementById('joystick-base');
       const joystickThumb = document.getElementById('joystick-thumb');
       let joystickActive = false;
       let joystickOrigin = { x: 0, y: 0 };
-      let joystickPosition = { x: 0, y: 0 };
       const joystickMaxRadius = 40;
       
       // Set up touch event handlers for joystick
@@ -398,6 +397,58 @@ class Controls {
         this.movementVector.x = deltaX / joystickMaxRadius;
         this.movementVector.z = -deltaY / joystickMaxRadius; // Invert Y for proper forward/backward
       };
+      
+      // Set up swipe controls for aiming (replaces mouse control)
+      let touchStartX = 0;
+      let touchStartY = 0;
+      let lastAimDirection = new THREE.Vector3(0, 0, 1);
+      
+      // Get the game area (everything except the controls overlay)
+      const gameArea = document.getElementById('game-canvas');
+      
+      // Add touch event handlers for swipe-to-aim
+      gameArea.addEventListener('touchstart', (e) => {
+        // Ignore if it's a multi-touch or if the touch is over UI elements
+        if (e.touches.length > 1 || e.target !== gameArea) return;
+        
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+      });
+      
+      gameArea.addEventListener('touchmove', (e) => {
+        // Ignore if it's a multi-touch or if the touch is over UI elements
+        if (e.touches.length > 1 || e.target !== gameArea) return;
+        
+        // Calculate the swipe direction
+        const touchX = e.touches[0].clientX;
+        const touchY = e.touches[0].clientY;
+        
+        // Calculate the direction vector based on the touch position relative to the center of the screen
+        const centerX = window.innerWidth / 2;
+        const centerY = window.innerHeight / 2;
+        
+        // Direction from center of screen to touch point
+        const dirX = touchX - centerX;
+        const dirY = -(touchY - centerY); // Invert Y for proper 3D space orientation
+        
+        // Create a 3D direction vector (we'll ignore Y component for simplicity)
+        const direction = new THREE.Vector3(dirX, 0, dirY).normalize();
+        
+        // Update player's aim direction
+        if (this.player) {
+          this.player.aimDirection = direction.clone();
+          
+          // Calculate angle for player rotation
+          const angle = Math.atan2(direction.x, direction.z);
+          this.player.object.rotation.y = angle;
+          
+          // Also update player's direction vector to match aim direction
+          this.player.direction.copy(direction);
+          
+          // Store for potential reuse
+          lastAimDirection = direction.clone();
+        }
+      });
       
       // Set up action buttons
       const jumpBtn = document.getElementById('jump-btn');

@@ -1,0 +1,97 @@
+/* Add these styles to improve mobile controls */
+
+#mobile-controls {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  pointer-events: none;
+  z-index: 100;
+}
+
+#mobile-controls.hidden {
+  display: none;
+}
+
+/* Left side - joystick */
+#joystick-container {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  pointer-events: auto;
+}
+
+#joystick-base {
+  width: 100px;
+  height: 100px;
+  background-color: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  position: relative;
+}
+
+#joystick-thumb {
+  width: 40px;
+  height: 40px;
+  background-color: rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Right side - action buttons */
+#action-buttons {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.action-btn {
+  width: 60px;
+  height: 60px;
+  background-color: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 16px;
+  color: white;
+  pointer-events: auto;
+  user-select: none;
+}
+
+/* Instructions overlay for touch controls */
+#mobile-instructions {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 10px;
+  border-radius: 5px;
+  max-width: 80%;
+  font-size: 12px;
+  display: none;
+}
+
+@media (max-width: 768px) {
+  #mobile-instructions {
+    display: block;
+  }
+  
+  /* Scale HUD elements for better mobile visibility */
+  #health-bar {
+    height: 15px;
+  }
+  
+  #minimap {
+    width: 100px;
+    height: 100px;
+  }
+}

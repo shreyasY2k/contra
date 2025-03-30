@@ -31,19 +31,23 @@
         </div>
 
         <div id="mobile-controls" class="hidden">
-            <div id="joystick-area">
+            <div id="joystick-container">
                 <div id="joystick-base">
                     <div id="joystick-thumb"></div>
                 </div>
             </div>
             <div id="action-buttons">
-                <button id="jump-btn">JUMP</button>
-                <button id="shoot-btn">SHOOT</button>
-                <button id="switch-weapon-btn">SWITCH</button>
-                <button id="action-btn">ACTION</button>
+                <div id="camera-toggle-btn" class="action-btn">CAM</div>
+                <div id="switch-weapon-btn" class="action-btn">WPN</div>
+                <div id="action-btn" class="action-btn">ACT</div>
+                <div id="jump-btn" class="action-btn">JUMP</div>
+                <div id="shoot-btn" class="action-btn">FIRE</div>
             </div>
-            <button id="camera-toggle-btn">CAM</button>
         </div>
+    </div>
+
+    <div id="mobile-instructions">
+        Swipe on screen to aim | Left joystick to move | Buttons to shoot & jump
     </div>
 
     <!-- Scripts -->
