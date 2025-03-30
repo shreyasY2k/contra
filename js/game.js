@@ -83,25 +83,21 @@ class Game {
       // Set up controls AFTER player is created
       this.controls = new Controls(this);
       
-      // Immediately update the mouse target once to initialize
-      if (this.controls.updateMouseTarget) {
-        // Set a default mouse target in front of the player on initialization
-        this.controls.mouseTarget.set(0, 0, 5);
-        this.controls.mouseDirection.set(0, 0, 1);
-      }
-      
       // Initialize enemies and vehicles
       this.setupEnemies();
       this.setupVehicles();
   
-      // Start game loop
+      // Start game loop and activate game
       this.isGameActive = true;
-      this.animate();
       
       // Hide loading screen
-      setTimeout(() => {
-        document.getElementById('loading-screen').style.display = 'none';
-      }, 1000);
+      document.getElementById('loading-screen').style.display = 'none';
+      
+      // Force a first render
+      this.renderer.render(this.scene, this.camera);
+      
+      // Start animation loop
+      requestAnimationFrame(() => this.animate());
       
       // Handle window resize
       window.addEventListener('resize', () => this.onWindowResize());

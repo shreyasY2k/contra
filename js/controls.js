@@ -317,69 +317,15 @@ class Controls {
       // Set up the joystick for movement (WASD equivalent)
       const joystickBase = document.getElementById('joystick-base');
       const joystickThumb = document.getElementById('joystick-thumb');
+      const joystickContainer = document.getElementById('joystick-container');
       let joystickActive = false;
       let joystickOrigin = { x: 0, y: 0 };
       const joystickMaxRadius = 40;
       
-      // Set up touch event handlers for joystick
-      joystickBase.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        joystickActive = true;
-        const touch = e.touches[0];
-        const rect = joystickBase.getBoundingClientRect();
-        joystickOrigin = {
-          x: rect.left + rect.width / 2,
-          y: rect.top + rect.height / 2
-        };
-        
-        updateJoystickPosition(touch.clientX, touch.clientY);
-      });
+      // Track which touch ID is controlling the joystick
+      let joystickTouchId = null;
       
-      document.addEventListener('touchmove', (e) => {
-        if (!joystickActive) return;
-        e.preventDefault();
-        const touch = Array.from(e.touches).find(t => {
-          const rect = joystickBase.getBoundingClientRect();
-          return (
-            t.clientX >= rect.left - 50 &&
-            t.clientX <= rect.right + 50 &&
-            t.clientY >= rect.top - 50 &&
-            t.clientY <= rect.bottom + 50
-          );
-        });
-        
-        if (touch) {
-          updateJoystickPosition(touch.clientX, touch.clientY);
-        }
-      });
-      
-      document.addEventListener('touchend', (e) => {
-        // Check if all touches related to joystick are gone
-        const rect = joystickBase.getBoundingClientRect();
-        let joystickTouchActive = false;
-        
-        for (let i = 0; i < e.touches.length; i++) {
-          const touch = e.touches[i];
-          if (
-            touch.clientX >= rect.left - 50 &&
-            touch.clientX <= rect.right + 50 &&
-            touch.clientY >= rect.top - 50 &&
-            touch.clientY <= rect.bottom + 50
-          ) {
-            joystickTouchActive = true;
-            break;
-          }
-        }
-        
-        if (!joystickTouchActive) {
-          joystickActive = false;
-          joystickThumb.style.transform = 'translate(0px, 0px)';
-          
-          // Reset movement vector when joystick is released
-          this.movementVector = { x: 0, z: 0 };
-        }
-      });
-      
+      // Define updateJoystickPosition in this scope to ensure it has access to this
       const updateJoystickPosition = (touchX, touchY) => {
         let deltaX = touchX - joystickOrigin.x;
         let deltaY = touchY - joystickOrigin.y;
@@ -396,47 +342,139 @@ class Controls {
         // Update movement vector for 360-degree control
         this.movementVector.x = deltaX / joystickMaxRadius;
         this.movementVector.z = -deltaY / joystickMaxRadius; // Invert Y for proper forward/backward
+        
+        // Force the isMoving flag to true when using joystick
+        this.isMoving = distance > 0.1 * joystickMaxRadius;
       };
       
+      // Function to check if an element is the joystick or a child of it
+      const isJoystickElement = (element) => {
+        return element === joystickBase || element === joystickThumb || 
+               element === joystickContainer || joystickContainer.contains(element);
+      };
+      
+      // Set up touch event handlers for joystick
+      joystickBase.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        // Only start tracking if we're not already tracking a touch
+        if (!joystickActive) {
+          joystickActive = true;
+          const touch = e.targetTouches[0];
+          joystickTouchId = touch.identifier; // Store the touch ID
+          
+          const rect = joystickBase.getBoundingClientRect();
+          joystickOrigin = {
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2
+          };
+          
+          updateJoystickPosition(touch.clientX, touch.clientY);
+        }
+      });
+      
+      document.addEventListener('touchmove', (e) => {
+        // Find our stored joystick touch ID
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const touch = e.changedTouches[i];
+          if (joystickActive && touch.identifier === joystickTouchId) {
+            e.preventDefault();
+            updateJoystickPosition(touch.clientX, touch.clientY);
+            return;  // Exit after handling joystick touch
+          }
+        }
+      }, { passive: false });
+      
+      document.addEventListener('touchend', (e) => {
+        // Check if the touch that ended was our joystick touch
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const touch = e.changedTouches[i];
+          if (touch.identifier === joystickTouchId) {
+            joystickActive = false;
+            joystickTouchId = null;
+            joystickThumb.style.transform = 'translate(0px, 0px)';
+            
+            // Reset movement vector when joystick is released
+            this.movementVector = { x: 0, z: 0 };
+            this.isMoving = false;
+            break;
+          }
+        }
+      });
+      
       // Set up swipe controls for aiming (replaces mouse control)
-      let touchStartX = 0;
-      let touchStartY = 0;
-      let lastAimDirection = new THREE.Vector3(0, 0, 1);
+      let aimTouchId = null;
       
       // Get the game area (everything except the controls overlay)
       const gameArea = document.getElementById('game-canvas');
+      const mobileControls = document.getElementById('mobile-controls');
+      const actionButtons = document.getElementById('action-buttons');
       
-      // Add touch event handlers for swipe-to-aim
-      gameArea.addEventListener('touchstart', (e) => {
-        // Ignore if it's a multi-touch or if the touch is over UI elements
-        if (e.touches.length > 1 || e.target !== gameArea) return;
+      // Add touch event handlers for swipe-to-aim, making sure to ignore joystick touches
+      document.addEventListener('touchstart', (e) => {
+        // Don't process if we already have an aim touch
+        if (aimTouchId !== null) return;
         
-        touchStartX = e.touches[0].clientX;
-        touchStartY = e.touches[0].clientY;
+        for (let i = 0; i < e.touches.length; i++) {
+          const touch = e.touches[i];
+          const target = touch.target;
+          
+          // Skip this touch if it's on a joystick element or action button
+          if (isJoystickElement(target) || target.closest('#action-buttons')) {
+            continue;
+          }
+          
+          // This touch is for aiming
+          aimTouchId = touch.identifier;
+          
+          // Direction from center of screen to touch point
+          const centerX = window.innerWidth / 2;
+          const centerY = window.innerHeight / 2;
+          const dirX = touch.clientX - centerX;
+          const dirY = -(touch.clientY - centerY); // Invert Y for proper 3D space orientation
+          
+          // Create a 3D direction vector
+          const direction = new THREE.Vector3(dirX, 0, dirY).normalize();
+          
+          updatePlayerAimFromTouch(direction);
+          break;
+        }
       });
       
-      gameArea.addEventListener('touchmove', (e) => {
-        // Ignore if it's a multi-touch or if the touch is over UI elements
-        if (e.touches.length > 1 || e.target !== gameArea) return;
-        
-        // Calculate the swipe direction
-        const touchX = e.touches[0].clientX;
-        const touchY = e.touches[0].clientY;
-        
-        // Calculate the direction vector based on the touch position relative to the center of the screen
-        const centerX = window.innerWidth / 2;
-        const centerY = window.innerHeight / 2;
-        
-        // Direction from center of screen to touch point
-        const dirX = touchX - centerX;
-        const dirY = -(touchY - centerY); // Invert Y for proper 3D space orientation
-        
-        // Create a 3D direction vector (we'll ignore Y component for simplicity)
-        const direction = new THREE.Vector3(dirX, 0, dirY).normalize();
-        
-        // Update player's aim direction
+      document.addEventListener('touchmove', (e) => {
+        // Look for our aim touch ID
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const touch = e.changedTouches[i];
+          if (touch.identifier === aimTouchId) {
+            // Direction from center of screen to touch point
+            const centerX = window.innerWidth / 2;
+            const centerY = window.innerHeight / 2;
+            const dirX = touch.clientX - centerX;
+            const dirY = -(touch.clientY - centerY); // Invert Y for proper 3D space orientation
+          
+            // Create a 3D direction vector
+            const direction = new THREE.Vector3(dirX, 0, dirY).normalize();
+            
+            updatePlayerAimFromTouch(direction);
+            break;
+          }
+        }
+      });
+      
+      document.addEventListener('touchend', (e) => {
+        // Check if the touch that ended was our aim touch
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const touch = e.changedTouches[i];
+          if (touch.identifier === aimTouchId) {
+            aimTouchId = null;
+            break;
+          }
+        }
+      });
+      
+      const updatePlayerAimFromTouch = (direction) => {
         if (this.player) {
-          this.player.aimDirection = direction.clone();
+          // Update player's aim direction
+          this.player.aimDirection.copy(direction);
           
           // Calculate angle for player rotation
           const angle = Math.atan2(direction.x, direction.z);
@@ -444,13 +482,18 @@ class Controls {
           
           // Also update player's direction vector to match aim direction
           this.player.direction.copy(direction);
-          
-          // Store for potential reuse
-          lastAimDirection = direction.clone();
         }
-      });
+      };
       
       // Set up action buttons
+      const buttons = document.querySelectorAll('.action-btn');
+      buttons.forEach(button => {
+        // Prevent buttons from triggering aim
+        button.addEventListener('touchstart', (e) => {
+          e.stopPropagation();
+        });
+      });
+      
       const jumpBtn = document.getElementById('jump-btn');
       const shootBtn = document.getElementById('shoot-btn');
       const switchWeaponBtn = document.getElementById('switch-weapon-btn');
@@ -460,36 +503,43 @@ class Controls {
       // Jump button
       jumpBtn.addEventListener('touchstart', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         this.keys.jump = true;
       });
-      jumpBtn.addEventListener('touchend', () => {
+      jumpBtn.addEventListener('touchend', (e) => {
+        e.stopPropagation();
         this.keys.jump = false;
       });
       
       // Shoot button
       shootBtn.addEventListener('touchstart', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         this.keys.shoot = true;
       });
-      shootBtn.addEventListener('touchend', () => {
+      shootBtn.addEventListener('touchend', (e) => {
+        e.stopPropagation();
         this.keys.shoot = false;
       });
       
       // Switch weapon button
       switchWeaponBtn.addEventListener('touchstart', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         this.player.cycleWeapon();
       });
       
       // Action button (enter/exit vehicle)
       actionBtn.addEventListener('touchstart', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         this.player.toggleVehicle();
       });
       
       // Camera toggle button
       cameraToggleBtn.addEventListener('touchstart', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         this.game.changeCameraMode();
       });
       
@@ -506,7 +556,7 @@ class Controls {
         this.keys.sprint = false;
       });
       
-      // Add interval for processing inputs
+      // Add interval for processing inputs with higher frequency for mobile
       setInterval(() => this.processInputs(), 1000 / 60); // 60fps input processing
     }
     

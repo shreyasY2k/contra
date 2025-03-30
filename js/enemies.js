@@ -43,95 +43,102 @@ class Enemy {
   }
   
   createEnemyModel() {
-    // Define geometries first to avoid reference errors
-    let bodyGeometry, bodyMaterial, headGeometry, headMaterial;
-    
     switch(this.type) {
       case 'soldier':
-        // Create soldier model (simplified humanoid)
-        bodyGeometry = new THREE.BoxGeometry(1, 2, 1);
-        bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-        this.bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
-        this.bodyMesh.position.y = 1;
-        this.bodyMesh.castShadow = true;
-        
-        headGeometry = new THREE.SphereGeometry(0.4, 16, 16);
-        headMaterial = new THREE.MeshStandardMaterial({ color: 0xffcccc });
-        this.headMesh = new THREE.Mesh(headGeometry, headMaterial);
-        this.headMesh.position.y = 2.5;
-        this.headMesh.castShadow = true;
-        
-        // Add to enemy object
-        this.object.add(this.bodyMesh);
-        this.object.add(this.headMesh);
+        this.createSoldierModel();
         break;
-        
       case 'tank':
-        // Create tank model (simplified)
-        bodyGeometry = new THREE.BoxGeometry(3, 1.5, 5);
-        bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x556b2f });
-        this.bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
-        this.bodyMesh.position.y = 0.75;
-        this.bodyMesh.castShadow = true;
-        
-        const turretGeometry = new THREE.BoxGeometry(2, 1, 3);
-        const turretMaterial = new THREE.MeshStandardMaterial({ color: 0x556b2f });
-        this.turretMesh = new THREE.Mesh(turretGeometry, turretMaterial);
-        this.turretMesh.position.set(0, 2, 0);
-        this.turretMesh.castShadow = true;
-        
-        const barrelGeometry = new THREE.BoxGeometry(0.5, 0.5, 4);
-        const barrelMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
-        this.barrelMesh = new THREE.Mesh(barrelGeometry, barrelMaterial);
-        this.barrelMesh.position.set(0, 2, 3);
-        this.barrelMesh.castShadow = true;
-        
-        // Add to enemy object
-        this.object.add(this.bodyMesh);
-        this.object.add(this.turretMesh);
-        this.object.add(this.barrelMesh);
+        this.createTankModel();
         break;
-        
       case 'jeep':
-        // Create jeep model (simplified)
-        bodyGeometry = new THREE.BoxGeometry(2, 1, 4);
-        bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
-        this.bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
-        this.bodyMesh.position.y = 0.5;
-        this.bodyMesh.castShadow = true;
-        
-        const topGeometry = new THREE.BoxGeometry(1.8, 1, 2);
-        const topMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
-        this.topMesh = new THREE.Mesh(topGeometry, topMaterial);
-        this.topMesh.position.set(0, 1.5, -0.5);
-        this.topMesh.castShadow = true;
-        
-        // Create wheels
-        const wheelGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.4, 16);
-        const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
-        
-        this.wheels = [];
-        const wheelPositions = [
-          { x: -1.2, y: 0.5, z: 1.5 },
-          { x: 1.2, y: 0.5, z: 1.5 },
-          { x: -1.2, y: 0.5, z: -1.5 },
-          { x: 1.2, y: 0.5, z: -1.5 }
-        ];
-        
-        wheelPositions.forEach((pos) => {
-          const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-          wheel.rotation.z = Math.PI / 2;
-          wheel.position.set(pos.x, pos.y, pos.z);
-          wheel.castShadow = true;
-          this.wheels.push(wheel);
-          this.object.add(wheel);
-        });
-        
-        // Add to enemy object
-        this.object.add(this.bodyMesh);
-        this.object.add(this.topMesh);
+        this.createJeepModel();
         break;
     }
+  }
+  
+  createSoldierModel() {
+    // Create soldier model (simplified humanoid)
+    const bodyGeometry = new THREE.BoxGeometry(1, 2, 1);
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+    this.bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    this.bodyMesh.position.y = 1;
+    this.bodyMesh.castShadow = true;
+    
+    const headGeometry = new THREE.SphereGeometry(0.4, 16, 16);
+    const headMaterial = new THREE.MeshStandardMaterial({ color: 0xffcccc });
+    this.headMesh = new THREE.Mesh(headGeometry, headMaterial);
+    this.headMesh.position.y = 2.5;
+    this.headMesh.castShadow = true;
+    
+    // Add to enemy object
+    this.object.add(this.bodyMesh);
+    this.object.add(this.headMesh);
+  }
+  
+  createTankModel() {
+    // Create tank model (simplified)
+    const bodyGeometry = new THREE.BoxGeometry(3, 1.5, 5);
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x556b2f });
+    this.bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    this.bodyMesh.position.y = 0.75;
+    this.bodyMesh.castShadow = true;
+    
+    const turretGeometry = new THREE.BoxGeometry(2, 1, 3);
+    const turretMaterial = new THREE.MeshStandardMaterial({ color: 0x556b2f });
+    this.turretMesh = new THREE.Mesh(turretGeometry, turretMaterial);
+    this.turretMesh.position.set(0, 2, 0);
+    this.turretMesh.castShadow = true;
+    
+    const barrelGeometry = new THREE.BoxGeometry(0.5, 0.5, 4);
+    const barrelMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+    this.barrelMesh = new THREE.Mesh(barrelGeometry, barrelMaterial);
+    this.barrelMesh.position.set(0, 2, 3);
+    this.barrelMesh.castShadow = true;
+    
+    // Add to enemy object
+    this.object.add(this.bodyMesh);
+    this.object.add(this.turretMesh);
+    this.object.add(this.barrelMesh);
+  }
+  
+  createJeepModel() {
+    // Create jeep model (simplified)
+    const bodyGeometry = new THREE.BoxGeometry(2, 1, 4);
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
+    this.bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    this.bodyMesh.position.y = 0.5;
+    this.bodyMesh.castShadow = true;
+    
+    const topGeometry = new THREE.BoxGeometry(1.8, 1, 2);
+    const topMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
+    this.topMesh = new THREE.Mesh(topGeometry, topMaterial);
+    this.topMesh.position.set(0, 1.5, -0.5);
+    this.topMesh.castShadow = true;
+    
+    // Create wheels
+    const wheelGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.4, 16);
+    const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+    
+    this.wheels = [];
+    const wheelPositions = [
+      { x: -1.2, y: 0.5, z: 1.5 },
+      { x: 1.2, y: 0.5, z: 1.5 },
+      { x: -1.2, y: 0.5, z: -1.5 },
+      { x: 1.2, y: 0.5, z: -1.5 }
+    ];
+    
+    wheelPositions.forEach((pos) => {
+      const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(pos.x, pos.y, pos.z);
+      wheel.castShadow = true;
+      this.wheels.push(wheel);
+      this.object.add(wheel);
+    });
+    
+    // Add to enemy object
+    this.object.add(this.bodyMesh);
+    this.object.add(this.topMesh);
   }
   
   update(deltaTime) {

@@ -20,25 +20,33 @@
   bottom: 20px;
   left: 20px;
   pointer-events: auto;
+  z-index: 110; /* Ensure it's above other elements */
+  width: 120px;
+  height: 120px;
+  touch-action: none;
 }
 
 #joystick-base {
-  width: 100px;
-  height: 100px;
+  width: 100%;
+  height: 100%;
   background-color: rgba(255, 255, 255, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.5);
   border-radius: 50%;
   position: relative;
+  touch-action: none; /* Disable browser handling of touch actions */
 }
 
 #joystick-thumb {
-  width: 40px;
-  height: 40px;
+  width: 50px;
+  height: 50px;
   background-color: rgba(255, 255, 255, 0.6);
+  border: 2px solid rgba(255, 255, 255, 0.8);
   border-radius: 50%;
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  touch-action: none; /* Disable browser handling of touch actions */
 }
 
 /* Right side - action buttons */
@@ -48,22 +56,28 @@
   right: 20px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 15px;
   align-items: flex-end;
+  z-index: 110;
+  touch-action: none;
 }
 
 .action-btn {
-  width: 60px;
-  height: 60px;
+  width: 70px;
+  height: 70px;
   background-color: rgba(255, 255, 255, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.5);
   border-radius: 50%;
   display: flex;
   justify-content: center;
   align-items: center;
   font-size: 16px;
+  font-weight: bold;
   color: white;
+  touch-action: none; /* Disable browser handling of touch actions */
   pointer-events: auto;
   user-select: none;
+  -webkit-tap-highlight-color: transparent; /* Remove highlight on tap */
 }
 
 /* Instructions overlay for touch controls */
@@ -80,7 +94,18 @@
   display: none;
 }
 
+#game-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none; /* Disable default touch behaviors like pinch-zoom */
+}
+
 @media (max-width: 768px) {
+  #mobile-controls {
+    display: flex !important;
+  }
+
   #mobile-instructions {
     display: block;
   }
