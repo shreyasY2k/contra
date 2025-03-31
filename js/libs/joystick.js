@@ -14,27 +14,36 @@ class Joystick {
     this.origin = { x: 0, y: 0 };
     this.angle = 0; // Angle in radians
     this.magnitude = 0; // Distance from center (0-1)
+    this.touchId = null; // Store the touch ID that's controlling this joystick
     
     this.init();
   }
   
   init() {
     // Touch events
-    this.baseElement.addEventListener('touchstart', this.onTouchStart.bind(this));
-    document.addEventListener('touchmove', this.onTouchMove.bind(this));
+    this.baseElement.addEventListener('touchstart', this.onTouchStart.bind(this), { passive: false });
+    document.addEventListener('touchmove', this.onTouchMove.bind(this), { passive: false });
     document.addEventListener('touchend', this.onTouchEnd.bind(this));
+    document.addEventListener('touchcancel', this.onTouchEnd.bind(this));
     
-    // Mouse events (for testing)
+    // Mouse events (for testing on desktop)
     this.baseElement.addEventListener('mousedown', this.onMouseDown.bind(this));
     document.addEventListener('mousemove', this.onMouseMove.bind(this));
     document.addEventListener('mouseup', this.onMouseUp.bind(this));
+    
+    console.log('Joystick initialized');
   }
   
   onTouchStart(event) {
+    // Prevent default to avoid scrolling
     event.preventDefault();
-    this.active = true;
     
+    if (this.active) return; // Already tracking a touch
+    
+    this.active = true;
     const touch = event.touches[0];
+    this.touchId = touch.identifier; // Store the touch ID
+    
     const rect = this.baseElement.getBoundingClientRect();
     
     this.origin.x = rect.left + rect.width / 2;
@@ -48,52 +57,45 @@ class Joystick {
     if (typeof this.onStart === 'function') {
       this.onStart(this.vector.x, this.vector.y, this.angle, this.magnitude);
     }
+    
+    console.log('Joystick touch start', this.vector);
   }
   
   onTouchMove(event) {
     if (!this.active) return;
     
-    // Find the relevant touch
-    const touch = Array.from(event.touches).find(t => {
-      const rect = this.baseElement.getBoundingClientRect();
-      return (
-        t.clientX >= rect.left - this.maxRadius &&
-        t.clientX <= rect.right + this.maxRadius &&
-        t.clientY >= rect.top - this.maxRadius &&
-        t.clientY <= rect.bottom + this.maxRadius
-      );
-    });
+    // Prevent default to avoid scrolling while using the joystick
+    event.preventDefault();
     
-    if (touch) {
-      this.position.x = touch.clientX;
-      this.position.y = touch.clientY;
-      this.updateJoystickPosition();
-      
-      if (typeof this.onMove === 'function') {
-        this.onMove(this.vector.x, this.vector.y);
+    // Find our specific touch by ID
+    for (let i = 0; i < event.touches.length; i++) {
+      const touch = event.touches[i];
+      if (touch.identifier === this.touchId) {
+        this.position.x = touch.clientX;
+        this.position.y = touch.clientY;
+        this.updateJoystickPosition();
+        
+        if (typeof this.onMove === 'function') {
+          this.onMove(this.vector.x, this.vector.y);
+        }
+        break;
       }
     }
   }
   
   onTouchEnd(event) {
-    // Check if all touches related to joystick are gone
-    const rect = this.baseElement.getBoundingClientRect();
-    let joystickTouchActive = false;
+    // Check if our tracked touch has ended
+    let touchStillActive = false;
     
+    // Check if our touch ID is still in the touches list
     for (let i = 0; i < event.touches.length; i++) {
-      const touch = event.touches[i];
-      if (
-        touch.clientX >= rect.left - this.maxRadius &&
-        touch.clientX <= rect.right + this.maxRadius &&
-        touch.clientY >= rect.top - this.maxRadius &&
-        touch.clientY <= rect.bottom + this.maxRadius
-      ) {
-        joystickTouchActive = true;
+      if (event.touches[i].identifier === this.touchId) {
+        touchStillActive = true;
         break;
       }
     }
     
-    if (!joystickTouchActive) {
+    if (!touchStillActive) {
       this.resetJoystick();
     }
   }
@@ -159,6 +161,7 @@ class Joystick {
   
   resetJoystick() {
     this.active = false;
+    this.touchId = null;
     
     // Reset thumb position
     this.thumbElement.style.transform = 'translate(0px, 0px)';
@@ -207,7 +210,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const joystickBase = document.getElementById('joystick-base');
     const joystickThumb = document.getElementById('joystick-thumb');
     
-    if (joystickBase && joystickThumb) {
+    if (joystickBase && joystickThumb && joystickArea) {
+      console.log('Initializing joystick');
+      
       window.gameJoystick = new Joystick({
         container: joystickArea,
         baseElement: joystickBase,
@@ -217,23 +222,33 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // Set up movement callback
       window.gameJoystick.setOnMove((x, y) => {
+        console.log('Joystick moved:', x, y);
         // Get controls instance from game
         const controls = window.game?.controls;
         if (controls) {
-          // Update movement vector - convert touch joystick to game movement
-          controls.movementVector.x = x;
+          // CORRECTED: Make sure joystick directions match expectations
+          // Positive X should move right, positive Y should move forward
+          controls.movementVector.x = x;  
           controls.movementVector.z = -y; // Invert Y axis for forward/backward
+          controls.isMoving = true; // Explicitly set moving to true
         }
       });
       
       window.gameJoystick.setOnEnd(() => {
+        console.log('Joystick released');
         // Reset movement when joystick is released
         const controls = window.game?.controls;
         if (controls) {
           controls.movementVector.x = 0;
           controls.movementVector.z = 0;
+          controls.isMoving = false;
         }
       });
+    } else {
+      console.error('Joystick elements not found in the DOM:');
+      console.error('joystickArea:', joystickArea);
+      console.error('joystickBase:', joystickBase);
+      console.error('joystickThumb:', joystickThumb);
     }
   }
 });

@@ -281,7 +281,7 @@ class Game {
         return;
       }
       
-      // Create rotation matrix from player's Y rotation
+      // Create rotation matrix from player's Y rotation only
       this.cameraMatrix.makeRotationY(playerRot);
       
       // Get the correct offset for the current camera mode
@@ -297,13 +297,19 @@ class Game {
       // Set camera look target based on mode
       if (this.currentCameraMode === 'FPS') {
         // In FPS mode, look in the direction the player is facing
-        // Create a point in front of the player
+        // Create a point in front of the player on the same horizontal plane
         const forward = new THREE.Vector3(0, 0, 10).applyMatrix4(this.cameraMatrix);
         const lookTarget = new THREE.Vector3().addVectors(playerPos, forward);
         this.camera.lookAt(lookTarget);
       } else {
-        // In TPP modes, look at the player
-        this.camera.lookAt(playerPos);
+        // In TPP modes, look at the player but maintain fixed vertical angle
+        // Create a look target that's at the player's position but at camera's height
+        const lookTarget = new THREE.Vector3(
+          playerPos.x,
+          playerPos.y, // Look at player's height directly (no vertical angle)
+          playerPos.z
+        );
+        this.camera.lookAt(lookTarget);
       }
       
       // Store current position and rotation for next frame
