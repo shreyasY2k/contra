@@ -114,6 +114,9 @@ class Vehicle {
     this.object.position.x = Math.max(-halfMapSize, Math.min(halfMapSize, this.object.position.x));
     this.object.position.z = Math.max(-halfMapSize, Math.min(halfMapSize, this.object.position.z));
     
+    // Ensure vehicle stays on ground level
+    this.object.position.y = 0;
+    
     // Update collider
     this.collider.setFromObject(this.object);
 
@@ -121,70 +124,241 @@ class Vehicle {
     this.velocity.x *= 0.95; // Friction effect
     this.velocity.z *= 0.95;
     
-    // Point the gun towards the closest enemy if occupied
-    if (this.isOccupied) {
-      let closestEnemy = null;
-      let closestDistance = Infinity;
-      
-      this.game.enemies.forEach(enemy => {
-        const distance = this.object.position.distanceTo(enemy.object.position);
-        if (distance < closestDistance && distance < 50) { // 50 units detection range
-          closestDistance = distance;
-          closestEnemy = enemy;
-        }
-      });
-      
-      if (closestEnemy) {
-        const targetPos = closestEnemy.object.position.clone();
+    // Improved gun rotation towards the mouse target or closest enemy
+    if (this.isOccupied && this.occupant) {
+      if (this.occupant.mouseTarget) {
+        // Get gun base position in world space
         const gunBasePos = new THREE.Vector3();
         this.gunBase.getWorldPosition(gunBasePos);
         
-        // Make gun base look at enemy
-        this.gunBase.lookAt(targetPos);
+        // Calculate direction to mouse target
+        const targetDirection = new THREE.Vector3()
+          .subVectors(this.occupant.mouseTarget, gunBasePos)
+          .normalize();
+        
+        // Keep gun level with ground (zero out Y component and renormalize)
+        targetDirection.y = 0;
+        if (targetDirection.length() > 0.001) {
+          targetDirection.normalize();
+          
+          // Calculate the world rotation needed for the gun to face the target
+          // Convert from world space to local space for the turret rotation
+          const worldQuat = new THREE.Quaternion().setFromUnitVectors(
+            new THREE.Vector3(0, 0, 1), // Forward vector
+            targetDirection // Target direction
+          );
+          
+          // Remove the parent's rotation influence to get local rotation
+          const parentWorldQuat = new THREE.Quaternion();
+          this.object.getWorldQuaternion(parentWorldQuat);
+          parentWorldQuat.invert(); // Invert to cancel parent rotation
+          
+          // Calculate desired local rotation
+          const localQuat = new THREE.Quaternion().multiplyQuaternions(parentWorldQuat, worldQuat);
+          
+          // Extract Euler rotation (Y-axis only for turret)
+          const euler = new THREE.Euler().setFromQuaternion(localQuat);
+          
+          // Apply rotation to gun base (turret)
+          this.gunBase.rotation.y = euler.y;
+        }
+      } else {
+        // If no mouse target, look for nearest enemy
+        let closestEnemy = null;
+        let closestDistance = Infinity;
+        
+        this.game.enemies.forEach(enemy => {
+          const distance = this.object.position.distanceTo(enemy.object.position);
+          if (distance < closestDistance && distance < 50) { // 50 units detection range
+            closestDistance = distance;
+            closestEnemy = enemy;
+          }
+        });
+        
+        if (closestEnemy) {
+          // Same rotation logic but targeting the closest enemy
+          const gunBasePos = new THREE.Vector3();
+          this.gunBase.getWorldPosition(gunBasePos);
+          
+          const targetDirection = new THREE.Vector3()
+            .subVectors(closestEnemy.object.position, gunBasePos)
+            .normalize();
+          
+          // Keep level with ground
+          targetDirection.y = 0;
+          if (targetDirection.length() > 0.001) {
+            targetDirection.normalize();
+            
+            // Convert to local rotation
+            const worldQuat = new THREE.Quaternion().setFromUnitVectors(
+              new THREE.Vector3(0, 0, 1),
+              targetDirection
+            );
+            
+            const parentWorldQuat = new THREE.Quaternion();
+            this.object.getWorldQuaternion(parentWorldQuat);
+            parentWorldQuat.invert();
+            
+            const localQuat = new THREE.Quaternion().multiplyQuaternions(parentWorldQuat, worldQuat);
+            const euler = new THREE.Euler().setFromQuaternion(localQuat);
+            
+            // Apply rotation
+            this.gunBase.rotation.y = euler.y;
+          }
+        }
+      }
+      
+      // Process shooting for vehicle
+      if (this.occupant.keys && this.occupant.keys.shoot) {
+        this.shoot();
       }
     }
+    
+    // Apply exponential friction to simulate better vehicle physics
+    const friction = 0.93;
+    this.velocity.x *= friction;
+    this.velocity.z *= friction;
   }
   
-  move(x, z) {
+  move(direction) {
     // Get the vehicle's forward direction based on its rotation
     const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.object.quaternion);
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.object.quaternion);
     
+    // Set a base speed for the vehicle type
+    const vehicleSpeed = this.speed;
+    const turnRate = 0.08; // Increased for more responsive turning
+    
     // Calculate movement direction
-    this.velocity.x = forward.x * z * this.speed + right.x * x * this.speed;
-    this.velocity.z = forward.z * z * this.speed + right.z * x * this.speed;
-    
-    // Update direction if moving
-    if (z !== 0) {
-      this.direction.copy(z > 0 ? forward : forward.negate());
+    switch(direction) {
+      case 'forward':
+        this.velocity.x = forward.x * vehicleSpeed;
+        this.velocity.z = forward.z * vehicleSpeed;
+        break;
+      case 'backward':
+        this.velocity.x = -forward.x * vehicleSpeed * 0.7;
+        this.velocity.z = -forward.z * vehicleSpeed * 0.7;
+        break;
+      case 'left':
+        // Turn vehicle left - increase turn rate for better responsiveness
+        this.object.rotation.y += turnRate;
+        
+        // Add slight forward momentum while turning for better control
+        if (this.velocity.length() < 0.1) {
+          this.velocity.x = forward.x * vehicleSpeed * 0.2;
+          this.velocity.z = forward.z * vehicleSpeed * 0.2;
+        }
+        break;
+      case 'right':
+        // Turn vehicle right - increase turn rate for better responsiveness
+        this.object.rotation.y -= turnRate;
+        
+        // Add slight forward momentum while turning for better control
+        if (this.velocity.length() < 0.1) {
+          this.velocity.x = forward.x * vehicleSpeed * 0.2;
+          this.velocity.z = forward.z * vehicleSpeed * 0.2;
+        }
+        break;
     }
     
-    // Turn the vehicle if moving sideways
-    if (x !== 0) {
-      const turnAngle = x * this.turnSpeed * -1; // Negative for correct steering
-      this.object.rotation.y += turnAngle * (Math.abs(z) > 0.1 ? 0.05 : 0.02); // Turn faster when moving forward
+    // Update direction based on current rotation
+    this.direction = forward.clone();
+  }
+  
+  moveWithJoystick(x, z) {
+    // Direct control using joystick input
+    // z is forward/backward, x is left/right turning
+    
+    // Forward/backward movement
+    if (Math.abs(z) > 0.1) {
+      const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.object.quaternion);
+      this.velocity.x = forward.x * z * this.speed;
+      this.velocity.z = forward.z * z * this.speed;
     }
+    
+    // Left/right turning (not strafing)
+    if (Math.abs(x) > 0.1) {
+      // Turn rate is proportional to joystick movement but more responsive
+      this.object.rotation.y += x * 0.08;
+      
+      // Add slight forward momentum for better control while turning with joystick
+      if (this.velocity.length() < 0.1) {
+        const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.object.quaternion);
+        this.velocity.x = forward.x * this.speed * 0.2;
+        this.velocity.z = forward.z * this.speed * 0.2;
+      }
+    }
+    
+    // Update direction based on current rotation
+    const newForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.object.quaternion);
+    this.direction.copy(newForward);
   }
   
   shoot() {
     if (!this.isOccupied) return;
     
     const currentTime = Date.now();
-    if (currentTime - this.lastShootTime < this.weapon.fireRate * 1000) {
+    if (!this.lastShootTime || currentTime - this.lastShootTime < this.weapon.fireRate * 1000) {
+      this.lastShootTime = currentTime;
       return; // Can't shoot yet
     }
     
     this.lastShootTime = currentTime;
     
-    // Calculate spawn position at the end of the gun
+    // Calculate spawn position at the end of the gun barrel in world space
     const spawnPos = new THREE.Vector3();
     this.gunBarrel.getWorldPosition(spawnPos);
     
-    // Get forward direction of the vehicle
-    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.object.quaternion);
+    // Calculate the world forward direction of the gun barrel
+    const barrelDirection = new THREE.Vector3(0, 0, 1);
+    barrelDirection.applyQuaternion(this.gunBarrel.getWorldQuaternion(new THREE.Quaternion()));
     
-    // Create the projectile
+    // Ensure the direction is properly normalized and level with ground
+    barrelDirection.y = 0;
+    barrelDirection.normalize();
+    
+    // Use this direction for shooting
+    const forward = barrelDirection;
+    
+    // Create the projectile with the exact turret direction
     this.game.spawnProjectile(spawnPos, forward, 'player', this.weapon);
+    
+    // Add visual feedback (muzzle flash)
+    this.createMuzzleFlash(spawnPos, forward);
+  }
+  
+  createMuzzleFlash(position, direction) {
+    // Create a quick muzzle flash effect
+    const flashGeometry = new THREE.SphereGeometry(0.3, 8, 8);
+    const flashMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff9900,
+      transparent: true,
+      opacity: 0.8
+    });
+    
+    const flash = new THREE.Mesh(flashGeometry, flashMaterial);
+    flash.position.copy(position);
+    
+    // Add point light
+    const light = new THREE.PointLight(0xff9900, 5, 3);
+    light.position.copy(position);
+    
+    this.game.scene.add(flash);
+    this.game.scene.add(light);
+    
+    // Fade out and remove after a short time
+    let opacity = 0.8;
+    const fadeInterval = setInterval(() => {
+      opacity -= 0.1;
+      flashMaterial.opacity = opacity;
+      light.intensity = opacity * 5;
+      
+      if (opacity <= 0) {
+        clearInterval(fadeInterval);
+        this.game.scene.remove(flash);
+        this.game.scene.remove(light);
+      }
+    }, 30);
   }
   
   takeDamage(amount) {
@@ -248,5 +422,59 @@ class Vehicle {
         }
       }, 50);
     }, 500);
+  }
+
+  checkCollision(object) {
+    // Get the exact bounds of both objects for precise collision
+    const vehicleBox = this.collider;
+    const objectBox = new THREE.Box3().setFromObject(object);
+    
+    // Return true only if the actual bounds intersect
+    return vehicleBox.intersectsBox(objectBox);
+  }
+
+  handleObstacleCollision(obstacle) {
+    // Get precise obstacle bounding box
+    const obstacleBox = new THREE.Box3().setFromObject(obstacle);
+    
+    // Get the vehicle's current bounding box
+    const vehicleBox = this.collider.clone();
+    
+    // Calculate centers for determining collision direction
+    const vehicleCenter = new THREE.Vector3();
+    vehicleBox.getCenter(vehicleCenter);
+    
+    const obstacleCenter = new THREE.Vector3();
+    obstacleBox.getCenter(obstacleCenter);
+    
+    // Vector pointing from obstacle to vehicle
+    const direction = new THREE.Vector3().subVectors(vehicleCenter, obstacleCenter);
+    
+    // Calculate overlap in each direction
+    const xOverlap = Math.min(
+      vehicleBox.max.x - obstacleBox.min.x,
+      obstacleBox.max.x - vehicleBox.min.x
+    );
+    
+    const zOverlap = Math.min(
+      vehicleBox.max.z - obstacleBox.min.z,
+      obstacleBox.max.z - vehicleBox.min.z
+    );
+    
+    // Apply the smaller correction to minimize movement disruption
+    if (xOverlap < zOverlap) {
+      // X-axis collision
+      const xDir = Math.sign(direction.x);
+      this.object.position.x += xDir * xOverlap + (xDir * 0.1); // Small extra padding
+      this.velocity.x = 0;
+    } else {
+      // Z-axis collision
+      const zDir = Math.sign(direction.z);
+      this.object.position.z += zDir * zOverlap + (zDir * 0.1); // Small extra padding
+      this.velocity.z = 0;
+    }
+    
+    // Update collider after position change
+    this.collider.setFromObject(this.object);
   }
 }

@@ -34,6 +34,8 @@ class Game {
       this.lastPlayerRotation = new THREE.Euler();
       this.lastCameraPosition = new THREE.Vector3();
       
+      this.isGameOver = false;
+      
       this.init();
     }
   
@@ -43,6 +45,9 @@ class Game {
       this.scene.background = new THREE.Color(0x87CEEB); // Sky blue
       this.scene.fog = new THREE.Fog(0x87CEEB, 100, 500);
   
+      // Check if the user came from a portal
+      this.checkPortalEntry();
+      
       // Create camera
       this.camera = new THREE.PerspectiveCamera(
         75,
@@ -77,6 +82,9 @@ class Game {
       this.lastPlayerRotation.copy(this.player.object.rotation);
       this.updateCameraPosition();
   
+      // Create portals (after environment is created)
+      this.createPortals();
+      
       // Create minimap
       this.minimap = new Minimap(this);
       
@@ -101,6 +109,9 @@ class Game {
       
       // Handle window resize
       window.addEventListener('resize', () => this.onWindowResize());
+      
+      // Show game instructions
+      this.showInstructions();
     }
   
     addLights() {
@@ -206,12 +217,28 @@ class Game {
     setupEnemies() {
       // Create enemy spawner that will add enemies regularly
       this.enemySpawnInterval = setInterval(() => {
-        // Adjust enemy count based on device type
-        const maxEnemies = this.isMobile ? 5 : 10; // Fewer enemies on mobile
+        // Adjust enemy count based on device type and increase difficulty
+        const maxEnemies = this.isMobile ? 8 : 15; // Increased from 5/10 to 8/15
         
         if (this.enemies.length < maxEnemies && this.isGameActive) {
           const enemyTypes = ['soldier', 'tank', 'jeep'];
-          const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+          // Increase chance of more difficult enemies
+          const typeWeights = [0.5, 0.3, 0.2]; // 50% soldiers, 30% tanks, 20% jeeps
+          
+          // Select enemy type based on weights
+          let randomValue = Math.random();
+          let typeIndex = 0;
+          let cumulativeWeight = 0;
+          
+          for (let i = 0; i < typeWeights.length; i++) {
+            cumulativeWeight += typeWeights[i];
+            if (randomValue <= cumulativeWeight) {
+              typeIndex = i;
+              break;
+            }
+          }
+          
+          const randomType = enemyTypes[typeIndex];
           const enemy = new Enemy(this, randomType);
           
           // Place at random position away from player
@@ -234,15 +261,17 @@ class Game {
           this.enemies.push(enemy);
           this.scene.add(enemy.object);
         }
-      }, this.isMobile ? 5000 : 3000); // Slower enemy spawn rate on mobile
+      }, this.isMobile ? 3500 : 2000); // Faster spawn rate (changed from 5000/3000)
     }
   
     setupVehicles() {
-      // Create some vehicles on the map
+      // Create more vehicles on the map
       const vehiclePositions = [
         new THREE.Vector3(50, 0, 50),
         new THREE.Vector3(-50, 0, -70),
-        new THREE.Vector3(80, 0, -120)
+        new THREE.Vector3(80, 0, -120),
+        new THREE.Vector3(-80, 0, 80),  // Added vehicle
+        new THREE.Vector3(0, 0, 120)    // Added vehicle
       ];
       
       vehiclePositions.forEach(position => {
@@ -363,6 +392,15 @@ class Game {
       
       // Check collisions
       this.checkCollisions();
+      
+      // Check for portal collisions
+      if (this.player && !this.player.isInVehicle) {
+        this.portals.forEach(portal => {
+          if (portal.checkCollision(this.player.object.position)) {
+            portal.enterPortal(this.player);
+          }
+        });
+      }
     }
     
     checkCollisions() {
@@ -387,7 +425,7 @@ class Game {
         
         // Check projectile collisions with environment
         this.environmentObjects.forEach(obj => {
-          if (projectile.checkCollision(obj)) {
+          if (obj.userData && obj.userData.solid && projectile.checkCollision(obj)) {
             projectile.destroy();
           }
         });
@@ -403,12 +441,58 @@ class Game {
             this.player.canEnterVehicle = null;
           }
         });
+        
+        // Player collision with environment objects
+        this.environmentObjects.forEach(obj => {
+          if (obj.userData && obj.userData.solid && this.player.checkWorldCollision(obj)) {
+            // Handle collision by preventing player from moving through object
+            this.player.handleObstacleCollision(obj);
+          }
+        });
       }
+      
+      // Vehicle collision with environment objects
+      this.vehicles.forEach(vehicle => {
+        this.environmentObjects.forEach(obj => {
+          if (obj.userData && obj.userData.solid && vehicle.checkCollision(obj)) {
+            // Handle collision by preventing vehicle from moving through object
+            vehicle.handleObstacleCollision(obj);
+          }
+        });
+      });
+      
+      // Player collision with environment objects - using precise colliders
+      this.environmentObjects.forEach(obj => {
+        if (obj.userData && obj.userData.solid) {
+          // Use the specific collider if available
+          const collisionObject = obj.userData.collider || obj;
+          if (this.player.checkWorldCollision(collisionObject)) {
+            this.player.handleObstacleCollision(collisionObject);
+          }
+        }
+      });
+      
+      // Vehicle collision with environment objects - using precise colliders
+      this.vehicles.forEach(vehicle => {
+        this.environmentObjects.forEach(obj => {
+          if (obj.userData && obj.userData.solid) {
+            // Use the specific collider if available
+            const collisionObject = obj.userData.collider || obj;
+            if (vehicle.checkCollision(collisionObject)) {
+              vehicle.handleObstacleCollision(collisionObject);
+            }
+          }
+        });
+      });
     }
   
     animate() {
-      if (!this.isGameActive) return;
+      if (!this.isGameActive) {
+        this.animating = false;
+        return;
+      }
       
+      this.animating = true;
       requestAnimationFrame(() => this.animate());
       this.update();
       this.renderer.render(this.scene, this.camera);
@@ -426,6 +510,250 @@ class Game {
       if (index !== -1) {
         this.enemies.splice(index, 1);
         this.scene.remove(enemy.object);
+      }
+    }
+    
+    showInstructions() {
+      // Create instructions panel
+      const instructionsPanel = document.createElement('div');
+      instructionsPanel.id = 'instructions-panel';
+      instructionsPanel.innerHTML = `
+        <h2>CONTROLS</h2>
+        <p><strong>WASD/Arrows:</strong> Move</p>
+        <p><strong>Mouse:</strong> Aim</p>
+        <p><strong>Left-Click/Ctrl:</strong> Shoot</p>
+        <p><strong>Space:</strong> Jump</p>
+        <p><strong>E:</strong> Enter/Exit Vehicle</p>
+        <p><strong>Q:</strong> Switch Weapon</p>
+        <p><strong>Shift:</strong> Sprint</p>
+        <p><strong>C:</strong> Change Camera</p>
+        <p class="dismiss">Click to dismiss</p>
+      `;
+      document.body.appendChild(instructionsPanel);
+      
+      // Add click event to dismiss
+      instructionsPanel.addEventListener('click', () => {
+        instructionsPanel.style.opacity = '0';
+        setTimeout(() => {
+          instructionsPanel.remove();
+        }, 500);
+      });
+      
+      // Auto-dismiss after 15 seconds
+      setTimeout(() => {
+        if (document.body.contains(instructionsPanel)) {
+          instructionsPanel.style.opacity = '0';
+          setTimeout(() => {
+            if (document.body.contains(instructionsPanel)) {
+              instructionsPanel.remove();
+            }
+          }, 500);
+        }
+      }, 15000);
+    }
+    
+    gameOver() {
+      // Set game over state
+      this.isGameActive = false;
+      this.isGameOver = true;
+      
+      // Create the game over overlay
+      const gameOverOverlay = document.createElement('div');
+      gameOverOverlay.id = 'game-over-overlay';
+      
+      // Add content to the game over screen
+      gameOverOverlay.innerHTML = `
+        <div class="game-over-content">
+          <h1>GAME OVER</h1>
+          <p>You have been defeated!</p>
+          <button id="restart-button">RESTART GAME</button>
+        </div>
+      `;
+      
+      document.body.appendChild(gameOverOverlay);
+      
+      // Add event listener to restart button
+      document.getElementById('restart-button').addEventListener('click', () => {
+        this.restartGame();
+      });
+      
+      // Also add keyboard support to restart
+      const keyDownHandler = (e) => {
+        if (e.code === 'Space' || e.code === 'Enter') {
+          this.restartGame();
+          window.removeEventListener('keydown', keyDownHandler);
+        }
+      };
+      
+      window.addEventListener('keydown', keyDownHandler);
+    }
+    
+    restartGame() {
+      // Remove game over overlay
+      const overlay = document.getElementById('game-over-overlay');
+      if (overlay) {
+        overlay.remove();
+      }
+      
+      // Clean up existing game elements
+      // Remove all enemies
+      while (this.enemies.length > 0) {
+        const enemy = this.enemies[0];
+        this.scene.remove(enemy.object);
+        this.enemies.shift();
+      }
+      
+      // Remove all projectiles
+      while (this.projectiles.length > 0) {
+        const projectile = this.projectiles[0];
+        this.scene.remove(projectile.object);
+        this.projectiles.shift();
+      }
+      
+      // Reset vehicles
+      this.vehicles.forEach(vehicle => {
+        this.scene.remove(vehicle.object);
+      });
+      this.vehicles = [];
+      this.setupVehicles();
+      
+      // Reset player
+      if (this.player) {
+        // Reset player properties
+        this.player.health = this.player.maxHealth;
+        this.player.sprintStamina = this.player.maxSprintStamina;
+        this.player.isInVehicle = false;
+        this.player.currentVehicle = null;
+        this.player.canEnterVehicle = null;
+        this.player.isSprinting = false;
+        this.player.isInvulnerable = false;
+        this.player.isJumping = false;
+        
+        // Reset player position
+        this.player.object.position.set(0, 0, 0);
+        this.player.velocity.set(0, 0, 0);
+        
+        // Update UI
+        this.player.updateHealthBar();
+        this.player.updateStaminaBar();
+        
+        // If player came from a portal, position them at entry point
+        if (this.fromPortal && this.portalEntryPosition) {
+          this.player.object.position.copy(this.portalEntryPosition);
+          
+          // Apply entry velocity if provided
+          if (this.portalEntryData.speedX || this.portalEntryData.speedY || this.portalEntryData.speedZ) {
+            this.player.velocity.set(
+              this.portalEntryData.speedX,
+              this.portalEntryData.speedY,
+              this.portalEntryData.speedZ
+            );
+          }
+          
+          // Apply entry rotation if provided
+          if (this.portalEntryData.rotationY) {
+            this.player.object.rotation.y = this.portalEntryData.rotationY;
+          }
+          
+          // Apply player color if specified
+          if (this.portalEntryData.color) {
+            this.player.setColor(this.portalEntryData.color);
+          }
+          
+          // Apply speed if specified
+          if (this.portalEntryData.speed) {
+            this.player.speed = this.portalEntryData.speed;
+          }
+          
+          // Show welcome message
+          this.player.showMessage(`Welcome to Contra! You came from ${this.portalEntryData.ref || 'another game'}`, 5000);
+        }
+      }
+      
+      // Reset camera
+      this.currentCameraMode = 'farTPP';
+      this.currentOffset.copy(this.cameraOffset.farTPP);
+      this.updateCameraPosition();
+      
+      // Reset game state
+      this.isGameOver = false;
+      this.isGameActive = true;
+      
+      // Restart animation loop
+      if (!this.animating) {
+        this.animate();
+      }
+      
+      // Show a restart message
+      this.player.showMessage("Game Restarted! Good luck!", 3000);
+    }
+    
+    checkPortalEntry() {
+      // Check if user came from a portal
+      const urlParams = new URLSearchParams(window.location.search);
+      this.fromPortal = urlParams.get('portal') === 'true';
+      
+      if (this.fromPortal) {
+        // Store portal entry data for player setup
+        this.portalEntryData = {
+          username: urlParams.get('username') || 'Player',
+          color: urlParams.get('color') || 'blue',
+          speed: parseFloat(urlParams.get('speed')) || 10,
+          ref: urlParams.get('ref') || '',
+          speedX: parseFloat(urlParams.get('speed_x')) || 0,
+          speedY: parseFloat(urlParams.get('speed_y')) || 0,
+          speedZ: parseFloat(urlParams.get('speed_z')) || 0,
+          rotationX: parseFloat(urlParams.get('rotation_x')) || 0,
+          rotationY: parseFloat(urlParams.get('rotation_y')) || 0,
+          rotationZ: parseFloat(urlParams.get('rotation_z')) || 0,
+          avatarUrl: urlParams.get('avatar_url') || '',
+          team: urlParams.get('team') || ''
+        };
+      }
+    }
+    
+    createPortals() {
+      // Create the main Vibe Jam portal
+      const vibeJamPortal = new Portal(
+        this,
+        'Vibeverse Portal',
+        'http://portal.pieter.com',
+        new THREE.Vector3(70, 0, 70),
+        0xff00ff // Purple color
+      );
+      this.scene.add(vibeJamPortal.object);
+      
+      // Create the Bangalore Delivery Dash portal
+      const bangalorePortal = new Portal(
+        this,
+        'Bangalore Delivery Dash',
+        'https://pranavbharadwaj007.github.io/',
+        new THREE.Vector3(-70, 0, 70),
+        0xff6600 // Orange color
+      );
+      this.scene.add(bangalorePortal.object);
+      
+      // Create a portal back to the referring game (if we came from a portal)
+      if (this.fromPortal && this.portalEntryData.ref) {
+        const returnPortal = new Portal(
+          this,
+          'Return Portal',
+          this.portalEntryData.ref,
+          new THREE.Vector3(0, 0, -70),
+          0x00ffff // Cyan color
+        );
+        this.scene.add(returnPortal.object);
+        
+        // Position player to spawn from this portal
+        this.portalEntryPosition = returnPortal.object.position.clone();
+        this.portalEntryPosition.x += 5; // Offset a bit from the portal
+      }
+      
+      // Create array to track all portals
+      this.portals = [vibeJamPortal, bangalorePortal];
+      
+      if (this.fromPortal && this.portalEntryData.ref) {
+        this.portals.push(returnPortal);
       }
     }
   }

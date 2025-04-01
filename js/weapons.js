@@ -97,12 +97,18 @@ class Projectile {
       return true; // Signal to remove the projectile
     }
     
-    // Update position
+    // Calculate precise movement for this frame
     const moveDistance = this.speed * deltaTime;
+    
+    // Keep projectile moving in a perfect straight line along initial direction
+    // This is crucial for accurate targeting
     const movement = this.direction.clone().multiplyScalar(moveDistance);
     this.object.position.add(movement);
     
-    // Update collider
+    // Ensure projectile orientation always matches its travel direction
+    this.object.lookAt(this.object.position.clone().add(this.direction));
+    
+    // Update collider with precise position
     this.collider.setFromObject(this.object);
     
     // Check if out of bounds

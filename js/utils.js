@@ -123,3 +123,33 @@ function isInViewCone(viewer, target, fovAngle, maxDistance) {
   
   return angle <= fovAngle / 2 && distance <= maxDistance;
 }
+
+// Simple cylinder class for collision detection
+// Define it as a standalone class rather than trying to extend THREE namespace
+class Cylinder {
+  constructor(center, radius, height) {
+    this.center = center.clone();
+    this.radius = radius;
+    this.height = height;
+    this.radiusSquared = radius * radius;
+  }
+  
+  contains(point) {
+    // Check if point is inside cylinder
+    const dx = point.x - this.center.x;
+    const dz = point.z - this.center.z;
+    const distanceSquared = dx * dx + dz * dz;
+    
+    // Check horizontal distance (within radius)
+    if (distanceSquared > this.radiusSquared) {
+      return false;
+    }
+    
+    // Check vertical distance (within height)
+    const dy = point.y - this.center.y;
+    return dy >= 0 && dy <= this.height;
+  }
+}
+
+// Add to global scope so it can be used elsewhere
+window.Cylinder = Cylinder;

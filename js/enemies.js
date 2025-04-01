@@ -15,6 +15,18 @@ class Enemy {
     // Setup different properties based on enemy type
     this.setupEnemyType();
     
+    // Make tanks and other vehicles more challenging
+    if (type === 'tank') {
+      this.health = 250; // Increased from 200
+      this.speed = 4;    // Increased from 3
+      this.damage = 35;  // Increased from 30
+      this.detectionRange = 60; // Increased from 50
+    } else if (type === 'jeep') {
+      this.health = 120; // Increased from 100
+      this.speed = 9;    // Increased from 8
+      this.detectionRange = 55; // Increased from implied 50
+    }
+    
     // Create the enemy model
     this.createEnemyModel();
     
@@ -152,26 +164,81 @@ class Enemy {
       const distanceToPlayer = enemyPos.distanceTo(playerPos);
       
       if (distanceToPlayer <= this.detectionRange && this.isAggressive) {
-        // Move towards player if not in attack range
-        if (distanceToPlayer > this.attackRange) {
-          // Calculate direction to player
-          const direction = new THREE.Vector3()
-            .subVectors(playerPos, enemyPos)
-            .normalize();
-          
-          // Move towards player
-          this.object.position.x += direction.x * this.speed * deltaTime;
-          this.object.position.z += direction.z * this.speed * deltaTime;
-          
-          // Rotate to face the player
-          this.object.lookAt(new THREE.Vector3(playerPos.x, enemyPos.y, playerPos.z));
-        } else {
-          // Attack player if in range and cooldown is over
-          const currentTime = Date.now();
-          if (currentTime - this.lastAttackTime > this.attackCooldown * 1000) {
-            this.attack();
-            this.lastAttackTime = currentTime;
+        // Check if there's a clear line of sight to the player
+        const direction = new THREE.Vector3().subVectors(playerPos, enemyPos).normalize();
+        const ray = new THREE.Raycaster(enemyPos, direction, 0, distanceToPlayer);
+        
+        // Check for obstructions in the line of sight
+        const obstructions = ray.intersectObjects(
+          this.game.environmentObjects.filter(obj => obj.userData && obj.userData.solid),
+          true
+        );
+        
+        const hasLineOfSight = obstructions.length === 0;
+        
+        if (hasLineOfSight) {
+          // Move towards player if not in attack range
+          if (distanceToPlayer > this.attackRange) {
+            // Calculate direction to player
+            
+            // Check for obstacles ahead
+            const predictedPos = enemyPos.clone().add(
+              direction.clone().multiplyScalar(this.speed * deltaTime * 2)
+            );
+            let obstacleAhead = false;
+            
+            // Check if the predicted position would collide with an obstacle
+            this.game.environmentObjects.forEach(obj => {
+              if (obj.userData && obj.userData.solid) {
+                const objBox = new THREE.Box3().setFromObject(obj);
+                const enemyBox = this.collider.clone();
+                
+                // Move enemy box to predicted position
+                enemyBox.min.add(new THREE.Vector3().subVectors(predictedPos, enemyPos));
+                enemyBox.max.add(new THREE.Vector3().subVectors(predictedPos, enemyPos));
+                
+                if (enemyBox.intersectsBox(objBox)) {
+                  obstacleAhead = true;
+                }
+              }
+            });
+            
+            if (!obstacleAhead) {
+              // Move towards player if no obstacles
+              this.object.position.x += direction.x * this.speed * deltaTime;
+              this.object.position.z += direction.z * this.speed * deltaTime;
+              
+              // Rotate to face the player
+              this.object.lookAt(new THREE.Vector3(playerPos.x, enemyPos.y, playerPos.z));
+            } else {
+              // Try to navigate around obstacle by adjusting direction
+              const sideStep = new THREE.Vector3(-direction.z, 0, direction.x);
+              
+              // Try moving to the side
+              this.object.position.x += sideStep.x * this.speed * 0.7 * deltaTime;
+              this.object.position.z += sideStep.z * this.speed * 0.7 * deltaTime;
+            }
+          } else {
+            // Attack player if in range and cooldown is over
+            const currentTime = Date.now();
+            if (currentTime - this.lastAttackTime > this.attackCooldown * 1000) {
+              this.attack();
+              this.lastAttackTime = currentTime;
+            }
+            
+            // Rotate to face the player
+            this.object.lookAt(new THREE.Vector3(playerPos.x, enemyPos.y, playerPos.z));
           }
+        } else {
+          // If can't see player but is close, try to navigate around obstacles
+          const randomDirection = new THREE.Vector3(
+            Math.random() * 2 - 1,
+            0,
+            Math.random() * 2 - 1
+          ).normalize();
+          
+          this.object.position.x += randomDirection.x * this.speed * 0.3 * deltaTime;
+          this.object.position.z += randomDirection.z * this.speed * 0.3 * deltaTime;
         }
       }
     }
@@ -186,11 +253,22 @@ class Enemy {
         break;
       case 'tank':
         // Stronger projectile for tank
-        this.shootAtPlayer(30); // Higher damage
+        this.shootAtPlayer(35); // Higher damage
+        // Add a second shot for tanks (with slight delay) to make them more dangerous
+        setTimeout(() => {
+          if (!this.isDead && this.game.isGameActive) {
+            this.shootAtPlayer(20);
+          }
+        }, 300);
         break;
       case 'jeep':
-        // Fast projectiles for jeep
+        // Fast projectiles for jeep with burst fire
         this.shootAtPlayer(15);
+        setTimeout(() => {
+          if (!this.isDead && this.game.isGameActive) {
+            this.shootAtPlayer(10);
+          }
+        }, 200);
         break;
     }
   }

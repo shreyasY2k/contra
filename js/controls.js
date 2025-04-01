@@ -150,6 +150,9 @@ class Controls {
       this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
       this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
 
+      // Flag to indicate we're now using mouse aiming
+      this.isAimingWithMouse = true;
+      
       // Update player's aim direction
       this.updateMouseTarget();
     });
@@ -157,6 +160,11 @@ class Controls {
     // Mouse controls for shooting
     window.addEventListener('mousedown', (e) => {
       if (e.button === 0) { // Left mouse button
+        // Update aim one more time on click to ensure accuracy
+        this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+        this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        this.updateMouseTarget();
+        
         this.keys.shoot = true;
       }
     });
@@ -174,12 +182,48 @@ class Controls {
   }
 
   updateMouseTarget() {
-    if (!this.player || this.player.isInVehicle) return;
+    if (!this.player) return;
 
     // Update the raycaster with the camera and mouse position
     this.raycaster.setFromCamera(this.mouse, this.game.camera);
-
-    // Instead of the complex code I had before, we should simply call:
+    
+    // Check if we're aiming at an enemy first
+    const intersects = this.raycaster.intersectObjects(this.game.scene.children, true);
+    
+    // Flag for whether we've found an enemy to aim at
+    let foundTarget = false;
+    
+    // Process intersections to see if we hit an enemy
+    for (let i = 0; i < intersects.length; i++) {
+      const object = intersects[i].object;
+      
+      // Traverse up the parent chain to find the root object
+      let parent = object;
+      while (parent.parent && parent.parent !== this.game.scene) {
+        parent = parent.parent;
+      }
+      
+      // Check if this object belongs to an enemy
+      const enemyIndex = this.game.enemies.findIndex(enemy => enemy.object === parent);
+      
+      if (enemyIndex >= 0) {
+        // We found an enemy, use its position as target
+        const enemyPos = this.game.enemies[enemyIndex].object.position.clone();
+        
+        // Adjust height to aim at enemy center
+        enemyPos.y += 1;
+        
+        // Create a new mouse position that would point directly to this enemy
+        const enemyScreenPos = enemyPos.clone().project(this.game.camera);
+        this.mouse.x = enemyScreenPos.x;
+        this.mouse.y = enemyScreenPos.y;
+        
+        foundTarget = true;
+        break;
+      }
+    }
+    
+    // Now set the mouse target - whether in vehicle or not
     this.player.setMouseTarget(this.mouse, this.game.camera);
   }
 
@@ -324,6 +368,7 @@ class Controls {
         // Update mouse coordinates for raycasting
         this.mouse.x = x;
         this.mouse.y = y;
+        this.isAimingWithMouse = true;
 
         // Update aim target
         this.updateMouseTarget();
@@ -447,11 +492,50 @@ class Controls {
         this.game.changeCameraMode();
       });
     }
+
+    // Add sprint button functionality
+    const sprintBtn = document.getElementById('switch-weapon-btn');  // Reuse weapon button as dual-function
+    if (sprintBtn) {
+      // Long press for sprint
+      let sprintPressTimer;
+      
+      sprintBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // On quick tap, switch weapon
+        sprintPressTimer = setTimeout(() => {
+          // Start sprinting on long press
+          this.keys.sprint = true;
+          // Visual feedback
+          sprintBtn.textContent = 'SPRINT';
+          sprintBtn.style.backgroundColor = 'rgba(255, 255, 0, 0.4)';
+        }, 300); // Long press threshold
+      });
+      
+      sprintBtn.addEventListener('touchend', (e) => {
+        e.stopPropagation();
+        clearTimeout(sprintPressTimer);
+        
+        if (this.keys.sprint) {
+          // Was sprinting, stop sprint
+          this.keys.sprint = false;
+          // Reset button appearance
+          sprintBtn.textContent = 'WPN';
+          sprintBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+        } else {
+          // Quick tap, cycle weapon
+          this.player.cycleWeapon();
+        }
+      });
+    }
   }
 
-  // Update this in your Controls class
   processInputs() {
     if (!this.game.isGameActive || !this.player) return;
+
+    // Pass the key states to the player for vehicle control
+    this.player.keys = this.keys;
 
     // IMPORTANT: Reset velocity at the start of each frame
     // This ensures the player stops when no keys are pressed
@@ -467,12 +551,12 @@ class Controls {
       else if (this.keys.left) direction = 'left';
       else if (this.keys.right) direction = 'right';
 
-      // Use sprint key if available
+      // Pass the sprint state to the move method
       this.player.move(direction, this.keys.sprint);
     }
-    // Process joystick movement 
+    // Process joystick movement with sprint support 
     else if (this.isMoving && (this.movementVector.x !== 0 || this.movementVector.z !== 0)) {
-      // For joystick, use moveWithJoystick method
+      // Pass the sprint state to the moveWithJoystick method
       this.player.moveWithJoystick(this.movementVector.x, this.movementVector.z, this.keys.sprint);
     }
     else {
@@ -487,15 +571,10 @@ class Controls {
       this.player.jump();
     }
 
-    // Handle shooting
+    // Handle combat action
     if (this.keys.shoot) {
-      if (this.isAimingWithMouse) {
-        // If aiming with mouse, shoot at mouse target
-        this.player.shoot(this.game.bullets, this.game.scene, this.mouseTarget);
-      } else {
-        // Otherwise shoot in the direction the player is facing
-        this.player.shoot(this.game.bullets, this.game.scene);
-      }
+      // Use the renamed method
+      this.player.fireWeapon();
     }
   }
 }

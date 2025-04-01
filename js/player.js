@@ -5,6 +5,10 @@ class Player {
     this.speed = 10;
     this.sprintMultiplier = 1.7;
     this.isSprinting = false;
+    this.sprintStamina = 100; // Add missing sprint stamina property
+    this.maxSprintStamina = 100; // Maximum sprint stamina
+    this.staminaRegenRate = 10; // Stamina regeneration rate per second
+    this.staminaUseRate = 20; // Stamina consumption rate per second
     this.jumpForce = 15;
     this.gravity = 30;
     this.health = 100;
@@ -35,6 +39,7 @@ class Player {
     this.createPlayerModel();
     this.updateHealthBar();
     this.updateWeaponInfo();
+    this.name = 'Player';
   }
 
   createPlayerModel() {
@@ -152,6 +157,23 @@ class Player {
         this.headMesh.material.opacity = 1;
       }
     }
+
+    // Handle sprint stamina regeneration/consumption
+    if (this.isSprinting && this.sprintStamina > 0) {
+      // Consume stamina while sprinting
+      this.sprintStamina = Math.max(0, this.sprintStamina - this.staminaUseRate * deltaTime);
+      
+      // If stamina is depleted, stop sprinting
+      if (this.sprintStamina <= 0) {
+        this.isSprinting = false;
+      }
+    } else if (!this.isSprinting && this.sprintStamina < this.maxSprintStamina) {
+      // Regenerate stamina when not sprinting
+      this.sprintStamina = Math.min(this.maxSprintStamina, this.sprintStamina + this.staminaRegenRate * deltaTime);
+    }
+    
+    // Update stamina bar on screen
+    this.updateStaminaBar();
   }
 
   // Updated move method for the Player class
@@ -258,50 +280,55 @@ class Player {
     // Convert mouse position to 3D space
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(mousePosition, camera);
-
+  
     // Create a plane at player's height for intersection
     const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.5);
     const target = new THREE.Vector3();
-
+  
     raycaster.ray.intersectPlane(groundPlane, target);
-
-    // Store target for shooting
+  
+    // Store target for targeting
     this.mouseTarget = target.clone();
     this.isAimingWithMouse = true;
-
-    // Don't rotate player if in vehicle
+  
+    // Don't rotate player if in vehicle - vehicle will handle its own turret rotation
     if (!this.isInVehicle) {
       // Calculate direction to target in the XZ plane
       const direction = new THREE.Vector3()
         .subVectors(target, this.object.position)
         .normalize();
-
+  
       // Ensure the y component is zero to keep rotation on the horizontal plane
       direction.y = 0;
-
+  
+      // Store this direction vector for precise targeting
+      this.aimDirection = direction.clone();
+  
       if (direction.length() > 0.01) {
         // Calculate target angle
         const targetAngle = Math.atan2(direction.x, direction.z);
-
+  
         // Apply smoothing to avoid twitchy rotation
         const smoothingFactor = 0.15; // Adjust for desired responsiveness
         let currentAngle = this.object.rotation.y;
-
+  
         // Calculate angle difference (handling wraparound at ±π)
         let angleDiff = targetAngle - currentAngle;
         if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
         if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-
+  
         // Apply smoothed rotation
         const newRotation = currentAngle + angleDiff * smoothingFactor;
         this.object.rotation.y = newRotation;
-
-        // Update direction vectors
+  
+        // Update direction vector for movement
         this.direction = new THREE.Vector3(Math.sin(newRotation), 0, Math.cos(newRotation));
-        this.aimDirection = this.direction.clone();
       }
+    } else if (this.currentVehicle) {
+      // Just share the target with the vehicle for turret aiming
+      this.currentVehicle.targetPosition = target.clone();
     }
-
+  
     return target;
   }
 
@@ -316,7 +343,17 @@ class Player {
     this.isSprinting = isSprinting;
   }
 
+  // Update shoot method to pass keys to vehicle
   shoot() {
+    if (this.isInVehicle && this.currentVehicle) {
+      // Store shoot state for vehicle to use
+      this.keys = this.keys || {};
+      this.keys.shoot = true;
+      
+      // Vehicle will handle the shooting in its update method
+      return;
+    }
+    
     const currentTime = Date.now();
     if (currentTime - this.lastShootTime < this.currentWeapon.fireRate * 1000) {
       return; // Can't shoot yet
@@ -328,12 +365,26 @@ class Player {
     const spawnPos = new THREE.Vector3();
     this.gunMesh.getWorldPosition(spawnPos);
 
-    // Use the player's aim direction for shooting direction
-    // This ensures bullets go toward the exact point the player is aiming at
-    const forward = this.aimDirection.clone();
+    let forward;
+    
+    // If player has mouse target, shoot directly at that point
+    if (this.mouseTarget) {
+      // Calculate direction from gun to target
+      forward = new THREE.Vector3()
+        .subVectors(this.mouseTarget, spawnPos)
+        .normalize();
+    } else {
+      // Fallback to current aim direction
+      forward = this.aimDirection.clone();
+    }
 
     // Create the projectile with the correct direction
     this.game.spawnProjectile(spawnPos, forward, 'player', this.currentWeapon);
+  }
+
+  fireWeapon() {
+    // For compatibility with the renamed method - just call shoot
+    this.shoot();
   }
 
   cycleWeapon() {
@@ -351,8 +402,18 @@ class Player {
       vehicle.isOccupied = true;
       vehicle.occupant = this;
 
-      // Hide player mesh when in vehicle
-      this.object.visible = false;
+      // Instead of hiding player mesh, move it to the vehicle's position
+      this.object.position.copy(vehicle.object.position);
+      this.object.position.y += 1; // Sitting height
+      
+      // Make player transparent but still visible
+      this.bodyMesh.material.transparent = true;
+      this.bodyMesh.material.opacity = 0.3;
+      this.headMesh.material.transparent = true;
+      this.headMesh.material.opacity = 0.3;
+      
+      // Notify player they've entered a vehicle
+      this.showMessage("Press E to exit vehicle");
     }
   }
 
@@ -362,18 +423,30 @@ class Player {
       this.currentVehicle.isOccupied = false;
       this.currentVehicle.occupant = null;
 
-      // Position player next to vehicle
+      // Position player next to vehicle with safe distance
       const vehiclePos = this.currentVehicle.object.position.clone();
+      const exitOffset = new THREE.Vector3(2, 0, 2); // Default offset
+      
+      // Use vehicle's direction to determine a better exit position
+      if (this.currentVehicle.direction) {
+        // Calculate a position to the side of the vehicle
+        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.currentVehicle.object.quaternion);
+        exitOffset.copy(right.multiplyScalar(3)); // Exit 3 units to the right
+      }
+      
       this.object.position.set(
-        vehiclePos.x + 2,
+        vehiclePos.x + exitOffset.x,
         0,
-        vehiclePos.z + 2
+        vehiclePos.z + exitOffset.z
       );
 
       this.currentVehicle = null;
 
-      // Show player mesh again
-      this.object.visible = true;
+      // Restore player visibility
+      this.bodyMesh.material.transparent = false;
+      this.bodyMesh.material.opacity = 1;
+      this.headMesh.material.transparent = false;
+      this.headMesh.material.opacity = 1;
     }
   }
 
@@ -408,7 +481,8 @@ class Player {
 
   die() {
     console.log('Player died');
-    // Game over logic would go here
+    // Trigger game over
+    this.game.gameOver();
   }
 
   isOnGround() {
@@ -449,5 +523,153 @@ class Player {
     // Simple collision detection with bounding boxes
     const objectBox = new THREE.Box3().setFromObject(object);
     return this.collider.intersectsBox(objectBox);
+  }
+
+  // Add a method to update the stamina bar
+  updateStaminaBar() {
+    const staminaBar = document.getElementById('stamina-bar');
+    if (staminaBar) {
+      const staminaPercentage = (this.sprintStamina / this.maxSprintStamina) * 100;
+      staminaBar.style.width = `${staminaPercentage}%`;
+      
+      // Change color based on stamina level
+      if (staminaPercentage < 20) {
+        staminaBar.style.backgroundColor = 'rgba(255, 0, 0, 0.6)'; // Red when low
+      } else if (staminaPercentage < 50) {
+        staminaBar.style.backgroundColor = 'rgba(255, 165, 0, 0.6)'; // Orange for medium
+      } else {
+        staminaBar.style.backgroundColor = 'rgba(255, 255, 0, 0.6)'; // Yellow for high
+      }
+    }
+  }
+
+  // Add a method to show temporary messages to the player
+  showMessage(text, duration = 3000) {
+    // Check if a message element already exists
+    let messageElement = document.getElementById('player-message');
+    
+    // If not, create a new one
+    if (!messageElement) {
+      messageElement = document.createElement('div');
+      messageElement.id = 'player-message';
+      document.body.appendChild(messageElement);
+    }
+    
+    // Update the message
+    messageElement.textContent = text;
+    messageElement.style.opacity = '1';
+    
+    // Clear any existing timeout
+    if (this.messageTimeout) {
+      clearTimeout(this.messageTimeout);
+    }
+    
+    // Set a timeout to fade out the message
+    this.messageTimeout = setTimeout(() => {
+      messageElement.style.opacity = '0';
+    }, duration);
+  }
+
+  checkWorldCollision(object) {
+    // Get the actual bounds of the object for precise collision detection
+    const objectBox = new THREE.Box3().setFromObject(object);
+    
+    // Get the current player collider
+    const playerBox = this.collider.clone();
+    
+    // Create a predicted box based on velocity
+    const predictedBox = playerBox.clone();
+    const velocityVector = new THREE.Vector3(
+      this.velocity.x * 0.1,
+      0,
+      this.velocity.z * 0.1
+    );
+    
+    // Translate the predicted box
+    predictedBox.min.add(velocityVector);
+    predictedBox.max.add(velocityVector);
+    
+    // Check for intersection with the obstacle's exact bounds
+    return predictedBox.intersectsBox(objectBox);
+  }
+
+  handleObstacleCollision(obstacle) {
+    // Get obstacle bounding box - using the actual mesh bounds
+    const obstacleBox = new THREE.Box3().setFromObject(obstacle);
+    
+    // Get the player's current bounding box
+    const playerBox = this.collider.clone();
+    
+    // Get penetration depth in each axis
+    const xOverlap = Math.min(
+      playerBox.max.x - obstacleBox.min.x,
+      obstacleBox.max.x - playerBox.min.x
+    );
+    
+    const zOverlap = Math.min(
+      playerBox.max.z - obstacleBox.min.z,
+      playerBox.max.z - obstacleBox.min.z
+    );
+    
+    // Determine direction of collision - this is crucial for accurate resolution
+    const playerCenter = new THREE.Vector3();
+    playerBox.getCenter(playerCenter);
+    
+    const obstacleCenter = new THREE.Vector3();
+    obstacleBox.getCenter(obstacleCenter);
+    
+    const direction = new THREE.Vector3().subVectors(playerCenter, obstacleCenter);
+    
+    // Determine which axis to resolve based on overlap and player movement
+    // Use the smaller overlap for minimal displacement
+    if (xOverlap < zOverlap) {
+      // X-axis collision
+      const xDir = Math.sign(direction.x); // +1 if player is to the right, -1 if to the left
+      this.object.position.x += xDir * xOverlap + (xDir * 0.1); // Small buffer to prevent sticking
+      this.velocity.x = 0;
+    } else {
+      // Z-axis collision
+      const zDir = Math.sign(direction.z); // +1 if player is in front, -1 if behind
+      this.object.position.z += zDir * zOverlap + (zDir * 0.1); // Small buffer to prevent sticking
+      this.velocity.z = 0;
+    }
+    
+    // Update collider after repositioning
+    this.collider.setFromObject(this.object);
+  }
+
+  // Add method to set player color
+  setColor(colorString) {
+    // Convert color string to THREE.js color
+    let color;
+    
+    if (colorString.startsWith('#')) {
+      // Hex color
+      color = new THREE.Color(colorString);
+    } else {
+      // Named color
+      switch(colorString.toLowerCase()) {
+        case 'red': color = new THREE.Color(0xff0000); break;
+        case 'green': color = new THREE.Color(0x00ff00); break;
+        case 'blue': color = new THREE.Color(0x0000ff); break;
+        case 'yellow': color = new THREE.Color(0xffff00); break;
+        case 'orange': color = new THREE.Color(0xff8800); break;
+        case 'purple': color = new THREE.Color(0x8800ff); break;
+        case 'pink': color = new THREE.Color(0xff0088); break;
+        default: color = new THREE.Color(0x0000ff); // Default blue
+      }
+    }
+    
+    // Apply color to player meshes
+    if (this.bodyMesh) {
+      this.bodyMesh.material.color = color;
+    }
+    
+    // Also update arm color (slightly darker version of body color)
+    if (this.leftArm && this.rightArm) {
+      const armColor = color.clone().multiplyScalar(0.8);
+      this.leftArm.material.color = armColor;
+      this.rightArm.material.color = armColor;
+    }
   }
 }

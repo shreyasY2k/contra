@@ -2,12 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Contra</title>
     <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="css/style.css">
     <link rel="icon" type="image/svg+xml" href="assets/icons/icon.svg" sizes="any">
     <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
 <body>
     <div id="loading-screen">
@@ -36,6 +38,9 @@
                     <div id="joystick-thumb"></div>
                 </div>
             </div>
+            <div id="stamina-indicator">
+                <div id="stamina-bar"></div>
+            </div>
             <div id="action-buttons">
                 <button id="camera-toggle-btn" class="action-btn">CAM</button>
                 <button id="switch-weapon-btn" class="action-btn">WPN</button>
@@ -44,6 +49,9 @@
                 <button id="shoot-btn" class="action-btn">FIRE</button>
             </div>
         </div>
+
+        <!-- Vibe Jam attribution -->
+        <a target="_blank" href="https://jam.pieter.com" style="font-family: 'system-ui', sans-serif; position: fixed; bottom: -1px; right: -1px; padding: 7px; font-size: 14px; font-weight: bold; background: #fff; color: #000; text-decoration: none; z-index: 10; border-top-left-radius: 12px; z-index: 10000; border: 1px solid #fff;">🕹️ Vibe Jam 2025</a>
     </div>
 
     <div id="mobile-instructions">
@@ -55,6 +63,7 @@
     <!-- Utility scripts first -->
     <script src="js/utils.js"></script>
     <script src="js/weapons.js"></script>
+    <script src="js/portal.js"></script>
     <!-- Game entity classes -->
     <script src="js/enemies.js"></script>
     <script src="js/vehicles.js"></script>
