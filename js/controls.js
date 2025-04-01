@@ -58,13 +58,19 @@ class Controls {
           this.keys.down = true;
           this.isMoving = true;
           break;
-        case 'ArrowLeft':
-        case 'KeyA':
+        case 'ArrowLeft': // Only fix Arrow keys, not WASD
+          this.keys.right = true; // Fix: Map ArrowLeft to right
+          this.isMoving = true;
+          break;
+        case 'ArrowRight': // Only fix Arrow keys, not WASD
+          this.keys.left = true; // Fix: Map ArrowRight to left 
+          this.isMoving = true;
+          break;
+        case 'KeyA': // Keep WASD working normally
           this.keys.left = true;
           this.isMoving = true;
           break;
-        case 'ArrowRight':
-        case 'KeyD':
+        case 'KeyD': // Keep WASD working normally
           this.keys.right = true;
           this.isMoving = true;
           break;
@@ -104,12 +110,16 @@ class Controls {
         case 'KeyS':
           this.keys.down = false;
           break;
-        case 'ArrowLeft':
-        case 'KeyA':
+        case 'ArrowLeft': // Only fix Arrow keys, not WASD
+          this.keys.right = false; // Fix: Map ArrowLeft to right
+          break;
+        case 'ArrowRight': // Only fix Arrow keys, not WASD
+          this.keys.left = false; // Fix: Map ArrowRight to left
+          break;
+        case 'KeyA': // Keep WASD working normally
           this.keys.left = false;
           break;
-        case 'ArrowRight':
-        case 'KeyD':
+        case 'KeyD': // Keep WASD working normally
           this.keys.right = false;
           break;
         case 'Space':
