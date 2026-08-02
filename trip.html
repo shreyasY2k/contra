@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>13-Day Road Trip &mdash; Route Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha512-puJW3E/qXDqYp9IfhAI54BJEaWIfloJ7JWs7OeD5i6ruC9JZL1gERT1wjtwXFlh7CjE7ZJ+/vcRZRkIYIb6p4g==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+<style>
+  :root{
+    --asphalt:#15171a;
+    --card:#1f2226;
+    --card-2:#262a2f;
+    --hairline:#34383e;
+    --amber:#f0a202;
+    --amber-dim:#8a640a;
+    --rust:#b5533c;
+    --moss:#3f7d5c;
+    --text:#edefef;
+    --muted:#96a0a8;
+    --faint:#5c646c;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  @media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto;} *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;} }
+
+  body{
+    margin:0;
+    background:var(--asphalt);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    line-height:1.55;
+  }
+  h1,h2,h3,.display{
+    font-family:'Oswald',sans-serif;
+    text-transform:uppercase;
+    letter-spacing:0.02em;
+    font-weight:600;
+    margin:0;
+  }
+  .mono{ font-family:'JetBrains Mono',monospace; }
+  a{ color:var(--amber); }
+  ::selection{ background:var(--amber); color:#1a1a1a; }
+  :focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
+
+  /* ---- dashboard header ---- */
+  .dash{
+    border-bottom:1px solid var(--hairline);
+    padding:1.6rem 1.4rem 1.2rem;
+    background:
+      repeating-linear-gradient(90deg, transparent, transparent 46px, rgba(240,162,2,0.055) 46px, rgba(240,162,2,0.055) 48px),
+      var(--asphalt);
+  }
+  .dash-inner{ max-width:1080px; margin:0 auto; opacity:0; animation:riseIn 0.6s ease-out 0.05s forwards; }
+  @keyframes riseIn{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace;
+    color:var(--amber);
+    font-size:0.78rem;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    margin-bottom:0.5rem;
+  }
+  .dash h1{
+    font-size:clamp(1.5rem, 4.4vw, 2.6rem);
+    line-height:1.12;
+    color:var(--text);
+  }
+  .dash h1 span{ color:var(--faint); font-weight:400; }
+  .readout-row{
+    display:flex; flex-wrap:wrap; gap:0.9rem;
+    margin-top:1.3rem;
+  }
+  .readout{
+    background:var(--card);
+    border:1px solid var(--hairline);
+    border-radius:4px;
+    padding:0.55rem 0.9rem;
+    min-width:104px;
+  }
+  .readout .num{ font-family:'JetBrains Mono',monospace; font-size:1.3rem; font-weight:700; color:var(--amber); }
+  .readout .lbl{ font-size:0.68rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin-top:0.1rem; }
+
+  /* ---- day tab strip ---- */
+  .tabstrip-wrap{
+    position:sticky; top:0; z-index:20;
+    background:rgba(21,23,26,0.94);
+    backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--hairline);
+  }
+  .tabstrip{
+    max-width:1080px; margin:0 auto;
+    display:flex; gap:0.35rem; overflow-x:auto;
+    padding:0.6rem 1.4rem;
+    scrollbar-width:thin;
+  }
+  .tabstrip a{
+    flex:0 0 auto;
+    font-family:'JetBrains Mono',monospace;
+    font-size:0.78rem;
+    color:var(--muted);
+    text-decoration:none;
+    border:1px solid var(--hairline);
+    border-radius:3px;
+    padding:0.3rem 0.55rem;
+    transition:border-color 0.15s, color 0.15s, background 0.15s;
+  }
+  .tabstrip a:hover, .tabstrip a:focus-visible{ border-color:var(--amber); color:var(--amber); }
+  .tabstrip a.buffer{ color:var(--moss); border-color:rgba(63,125,92,0.5); }
+
+  main{ max-width:1080px; margin:0 auto; padding:0 1.4rem; }
+  section{ padding:2.6rem 0; border-bottom:1px solid var(--hairline); }
+  section:last-of-type{ border-bottom:none; }
+  .section-head{ display:flex; align-items:baseline; gap:0.7rem; margin-bottom:1.1rem; }
+  .section-head h2{ font-size:1.35rem; color:var(--text); }
+  .section-head .tag{ font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:var(--amber-dim); }
+
+  /* ---- map ---- */
+  #map{
+    height:min(72vh, 560px);
+    border-radius:6px;
+    border:1px solid var(--hairline);
+    background:var(--card);
+  }
+  .map-legend{
+    display:flex; flex-wrap:wrap; gap:1rem 1.6rem;
+    margin-top:0.9rem;
+    font-size:0.78rem; color:var(--muted);
+  }
+  .map-legend span{ display:inline-flex; align-items:center; gap:0.4rem; }
+  .swatch{ width:12px; height:12px; border-radius:50%; display:inline-block; flex:0 0 auto; }
+  .swatch.tri{ border-radius:2px; transform:rotate(45deg); }
+
+  /* ---- day cards ---- */
+  .day-card{
+    display:grid;
+    grid-template-columns:64px 1fr;
+    gap:1.1rem;
+    padding:1.1rem 0;
+    border-top:1px solid var(--hairline);
+    scroll-margin-top:64px;
+  }
+  .day-card:first-of-type{ border-top:none; }
+  .day-num{
+    font-family:'Oswald',sans-serif;
+    font-weight:700;
+    font-size:1.9rem;
+    color:var(--amber);
+    line-height:1;
+  }
+  .day-num .of{ display:block; font-family:'JetBrains Mono',monospace; font-size:0.6rem; font-weight:400; color:var(--faint); text-transform:uppercase; margin-top:0.2rem; }
+  .day-body .route{ font-size:1.02rem; font-weight:500; margin-bottom:0.4rem; }
+  .day-meta{
+    display:flex; flex-wrap:wrap; gap:0.5rem 1.1rem;
+    font-family:'JetBrains Mono',monospace; font-size:0.78rem; color:var(--muted);
+    margin-bottom:0.5rem;
+  }
+  .day-meta .night{ color:var(--moss); }
+  .day-note{
+    background:var(--card);
+    border-left:3px solid var(--amber);
+    padding:0.6rem 0.85rem;
+    font-size:0.86rem;
+    color:var(--muted);
+    border-radius:0 4px 4px 0;
+    margin-top:0.5rem;
+  }
+  .day-card.buffer .day-num{ color:var(--moss); }
+  .day-card.buffer .day-note{ border-left-color:var(--moss); }
+
+  /* ---- place cards ---- */
+  .place-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(280px,1fr)); gap:1rem; }
+  .place-card{
+    background:var(--card);
+    border:1px solid var(--hairline);
+    border-radius:6px;
+    padding:1.2rem 1.3rem;
+  }
+  .place-card h3{ font-size:1.05rem; color:var(--text); margin-bottom:0.15rem; }
+  .place-card .span{ font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:var(--amber-dim); margin-bottom:0.7rem; display:block; }
+  .place-card p{ font-size:0.86rem; color:var(--muted); margin:0 0 0.55rem; }
+  .place-card p:last-child{ margin-bottom:0; }
+  .place-card strong{ color:var(--text); font-weight:600; }
+
+  /* ---- practical notes ---- */
+  .notes-list{ list-style:none; margin:0; padding:0; display:grid; gap:0.7rem; }
+  .notes-list li{
+    padding-left:1.4rem;
+    position:relative;
+    font-size:0.9rem;
+    color:var(--muted);
+  }
+  .notes-list li::before{
+    content:"›";
+    position:absolute; left:0; color:var(--amber);
+    font-family:'JetBrains Mono',monospace;
+  }
+  .notes-list strong{ color:var(--text); }
+
+  .slack-banner{
+    background:var(--card-2);
+    border:1px solid var(--hairline);
+    border-radius:6px;
+    padding:1rem 1.2rem;
+    font-size:0.88rem;
+    color:var(--muted);
+    margin-top:1.4rem;
+  }
+  .slack-banner strong{ color:var(--amber); }
+
+  footer{
+    text-align:center;
+    padding:2rem 1.4rem 3rem;
+    color:var(--faint);
+    font-size:0.76rem;
+    font-family:'JetBrains Mono',monospace;
+  }
+
+  .leaflet-popup-content-wrapper{ background:var(--card); color:var(--text); border-radius:4px; }
+  .leaflet-popup-content{ font-family:'Inter',sans-serif; font-size:0.82rem; }
+  .leaflet-popup-tip{ background:var(--card); }
+  .trip-badge{
+    background:var(--moss); color:#fff; border-radius:50%;
+    width:26px; height:26px; display:flex; align-items:center; justify-content:center;
+    font-family:'JetBrains Mono',monospace; font-weight:700; font-size:0.78rem;
+    border:2px solid #0e1a13; box-shadow:0 1px 4px rgba(0,0,0,0.5);
+  }
+  .trip-dot{
+    background:var(--amber); border-radius:50%; width:10px; height:10px;
+    border:2px solid #241a02;
+  }
+  .trip-tri{
+    width:0; height:0;
+    border-left:7px solid transparent; border-right:7px solid transparent;
+    border-bottom:12px solid var(--rust);
+    filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));
+  }
+  .trip-start{
+    background:#c0392b; color:#fff; border-radius:50%;
+    width:30px; height:30px; display:flex; align-items:center; justify-content:center;
+    font-size:1rem; border:2px solid #3a0f0a; box-shadow:0 1px 4px rgba(0,0,0,0.5);
+  }
+</style>
+</head>
+<body>
+
+<header class="dash">
+  <div class="dash-inner">
+    <div class="eyebrow">Route Log &bull; Self-Drive &bull; 3 Travelers</div>
+    <h1>Bangalore <span>&rarr;</span> Hampi <span>&rarr;</span> Dandeli <span>&rarr;</span> Goa <span>&rarr;</span> Pune <span>&rarr;</span> Aurangabad <span>&rarr;</span> Badami <span>&rarr;</span> Bangalore</h1>
+    <div class="readout-row">
+      <div class="readout"><div class="num">13</div><div class="lbl">Days</div></div>
+      <div class="readout"><div class="num">~2,800</div><div class="lbl">Km Total</div></div>
+      <div class="readout"><div class="num">7</div><div class="lbl">Stops</div></div>
+      <div class="readout"><div class="num">1</div><div class="lbl">Buffer Day</div></div>
+    </div>
+  </div>
+</header>
+
+<div class="tabstrip-wrap">
+  <nav class="tabstrip" aria-label="Jump to day">
+    <a href="#day1">D1</a><a href="#day2">D2</a><a href="#day3">D3</a><a href="#day4">D4</a>
+    <a href="#day5">D5</a><a href="#day6">D6</a><a href="#day7" class="buffer">D7</a><a href="#day8">D8</a>
+    <a href="#day9">D9</a><a href="#day10">D10</a><a href="#day11">D11</a><a href="#day12">D12</a>
+    <a href="#day13" class="buffer">D13</a>
+  </nav>
+</div>
+
+<main>
+
+  <section id="map-section">
+    <div class="section-head"><h2>Route Map</h2><span class="tag">// live nav</span></div>
+    <div id="map" role="application" aria-label="Interactive map of the road trip route"></div>
+    <div class="map-legend">
+      <span><span class="swatch" style="background:#c0392b"></span> Start / End &mdash; Bangalore</span>
+      <span><span class="swatch" style="background:var(--moss)"></span> Overnight stay (numbered by arrival day)</span>
+      <span><span class="swatch" style="background:var(--amber)"></span> Pass-through waypoint</span>
+      <span><span class="swatch tri" style="background:var(--rust)"></span> Sightseeing stop</span>
+    </div>
+  </section>
+
+  <section id="day-by-day">
+    <div class="section-head"><h2>Day by Day</h2><span class="tag">// 13 entries</span></div>
+    <div id="days-list"></div>
+
+    <div class="slack-banner">
+      <strong>Slack status.</strong> Day 7 is the only buffer inside the trip &mdash; it protects the first half (Hampi through the Goa&ndash;Pune drive). The return leg (Day 11&ndash;12, the two longest drives) has zero cushion. Day 13 is a buffer once already home, not before.
+    </div>
+  </section>
+
+  <section id="places">
+    <div class="section-head"><h2>Place by Place</h2><span class="tag">// what to see + where to stay</span></div>
+    <div class="place-grid" id="places-grid"></div>
+  </section>
+
+  <section id="practical">
+    <div class="section-head"><h2>Practical Notes</h2><span class="tag">// before you leave</span></div>
+    <ul class="notes-list">
+      <li><strong>Documents:</strong> vehicle RC, insurance, valid PUC certificate, and all drivers' licenses &mdash; the route crosses state lines four times.</li>
+      <li><strong>Rough budget:</strong> fuel + tolls for a sedan across the ~2,800&nbsp;km loop typically runs &#8377;16,000&ndash;22,000. Get an exact toll estimate from an app like Tollguru closer to departure.</li>
+      <li><strong>Driving discipline:</strong> no night driving through ghat sections (Hampi&ndash;Dandeli, Dandeli&ndash;Goa, Goa&ndash;Pune via Amboli/Kolhapur). Start long-drive days by 6&ndash;7am. Rotate drivers hardest on Day 6 and Day 11 &mdash; the two 9&ndash;10hr days.</li>
+      <li><strong>Cave closures checked:</strong> Ellora (closed Tuesdays) and Ajanta (closed Mondays) have both been checked against the group's actual dates and confirmed clear on Day 9 and Day 10.</li>
+      <li><strong>Day 1 departure is load-bearing:</strong> leave by 5&ndash;5:30am or Hampi sightseeing gets rushed.</li>
+    </ul>
+  </section>
+
+</main>
+
+<footer>ROUTE LOG &mdash; INTERNAL USE &mdash; 3 TRAVELERS</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha512-BwHfrr4c9kmRkLw6iXFdzcdWV/PGkVgiIyIWLLlTSXzWQzxuSg4DiQUCpauz/EWjgk5TYQqX/kvn9pG1NpYfqg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+/* ---------------- Trip data ---------------- */
+const mainRoute = [
+  {name:"Bangalore", lat:12.9716, lon:77.5946, kind:"start", label:"START"},
+  {name:"Chitradurga (pass-through)", lat:14.2160, lon:76.3989, kind:"waypoint"},
+  {name:"Hampi", lat:15.3406, lon:76.4204, kind:"stay", day:"1"},
+  {name:"Dandeli", lat:15.2616, lon:74.5401, kind:"stay", day:"2"},
+  {name:"Goa (Vagator)", lat:15.5942, lon:73.7356, kind:"stay", day:"3"},
+  {name:"Kolhapur (lunch stop)", lat:16.6948, lon:74.2228, kind:"waypoint"},
+  {name:"Pune", lat:18.5272, lon:73.8786, kind:"stay", day:"6"},
+  {name:"Aurangabad", lat:19.8760, lon:75.3588, kind:"stay", day:"8"},
+  {name:"Badami", lat:15.9355, lon:75.6753, kind:"stay", day:"11"},
+  {name:"Bangalore", lat:12.9716, lon:77.5946, kind:"end", label:"END"}
+];
+
+const spurs = [
+  {from:[19.8760,75.3588], to:[20.5518,75.7033], name:"Ajanta Caves (day trip)"}
+];
+
+const sightseeing = [
+  {name:"Virupaksha Temple", lat:15.3351, lon:76.4587, note:"Day 2"},
+  {name:"Vittala Temple & Stone Chariot", lat:15.3423, lon:76.4758, note:"Day 2"},
+  {name:"Fort Aguada", lat:15.4923, lon:73.7737, note:"Goa"},
+  {name:"Shaniwar Wada", lat:18.5196, lon:73.8554, note:"Day 7"},
+  {name:"Ellora Caves", lat:20.0268, lon:75.1771, note:"Day 9"},
+  {name:"Grishneshwar Temple", lat:20.0249, lon:75.1699, note:"Day 9"},
+  {name:"Daulatabad Fort", lat:19.9437, lon:75.2205, note:"Day 9"}
+];
+
+const days = [
+  {n:1, route:"Bangalore &rarr; Hampi <em>(leave 5&ndash;5:30am, arrive by noon &mdash; sightseeing that afternoon/evening)</em>", dist:"350 km / 7 hrs", night:"Hampi",
+   note:"Day 1 departure is load-bearing: leave by 5&ndash;5:30am or Hampi goes back to being rushed."},
+  {n:2, route:"Hampi morning sightseeing &rarr; drive to Dandeli", dist:"230&ndash;250 km / 5&ndash;6 hrs", night:"Dandeli",
+   note:"Still a full day &mdash; be in the car by 1&ndash;2pm at the latest."},
+  {n:3, route:"Dandeli morning activity &rarr; drive to Goa", dist:"110 km / 2.5&ndash;3 hrs", night:"Goa"},
+  {n:4, route:"Goa", dist:"Local", night:"Goa"},
+  {n:5, route:"Goa (3rd night)", dist:"Local", night:"Goa"},
+  {n:6, route:"Goa &rarr; Pune <em>(via Kolhapur)</em>", dist:"450 km / 9&ndash;10 hrs", night:"Pune"},
+  {n:7, route:"Flex / buffer day in Pune", dist:"Local / none", night:"Pune", buffer:true,
+   note:"If Days 1&ndash;6 ran on schedule, use it for a proper Pune day (Shaniwar Wada, Aga Khan Palace, no rush). If not, this is where the slack from the first half gets absorbed."},
+  {n:8, route:"Pune &rarr; Aurangabad", dist:"235 km / 4&ndash;5 hrs", night:"Aurangabad"},
+  {n:9, route:"Ellora Caves + Grishneshwar Temple <em>(adjacent)</em> + Daulatabad Fort <em>(tunnel + Chand Minar only, en route back)</em>", dist:"Local", night:"Aurangabad"},
+  {n:10, route:"Ajanta Caves day trip", dist:"105 km one-way", night:"Aurangabad"},
+  {n:11, route:"Aurangabad &rarr; Badami", dist:"520&ndash;530 km / 9&ndash;10 hrs", night:"Badami",
+   note:"Longest driving day of the trip, with no cushion in front of it. If the group is gassed out, Solapur is the fallback &mdash; shorter, less to see."},
+  {n:12, route:"Badami &rarr; Bangalore", dist:"450 km / 9 hrs", night:"Home"},
+  {n:13, route:"Buffer day &mdash; no driving planned", dist:"&mdash;", night:"Home", buffer:true,
+   note:"Absorbs any delay from the return leg. If unused, it's just a rest day."}
+];
+
+const places = [
+  {name:"Hampi", span:"Day 1&ndash;2", see:"Virupaksha Temple, Vittala Temple &amp; Stone Chariot, Royal Enclosure, Lotus Mahal, Elephant Stables, sunset from Hemakuta or Matanga Hill.", enroute:"Chitradurga Fort &mdash; roughly the halfway point from Bangalore, worth a 45-min stop.", stay:"Hampi's Boulders Resort (4.5&#9733;, riverside, pool cut into boulders). Splurge: Evolve Back, Hampi (4.6&#9733;)."},
+  {name:"Dandeli", span:"Day 2&ndash;3", see:"White-water rafting/kayaking on the Kali River, Syntheri Rock, Kavala Caves, Dandeli Wildlife Sanctuary if time allows.", stay:"White Water Resort (4.5&#9733;, right on the river) or Dandeli Kali River Resort (4.2&#9733;, rafting/kayaking on-site)."},
+  {name:"Goa", span:"Day 3&ndash;5", see:"Vagator, Anjuna, Baga beaches; Fort Aguada; Chapora Fort; Old Goa churches. Dudhsagar Falls is spectacular but jeep safaris sometimes suspend in heavy monsoon &mdash; check locally.", stay:"Stone Wood Beach Resort, Vagator (4.3&#9733;, walking distance to the clubs). Higher-rated: Ramada by Wyndham Goa Vagator (4.8&#9733;). Budget: CASA Vagator (4.0&#9733;)."},
+  {name:"Pune", span:"Day 6&ndash;8", see:"Shaniwar Wada, Aga Khan Palace. With the buffer day, no need to rush.", stay:"The Central Park Hotel (4.1&#9733;, central)."},
+  {name:"Aurangabad", span:"Day 8&ndash;10", see:"Ellora Caves (don't miss Cave 16, the Kailasa Temple), Grishneshwar Temple (12 Jyotirlingas &mdash; men must remove shirts at the sanctum, no phones/cameras), Daulatabad Fort (tunnel trap + Chand Minar, skip the full summit), Ajanta Caves (bring a flashlight). Aurangabad Caves are skippable if short on time.", stay:"Welcomhotel By ITC Hotels, Rama International (4.5&#9733;, consistently strong reviews). Budget/social: Zostel Chhatrapati Sambhajinagar (4.4&#9733;)."},
+  {name:"Badami", span:"Day 11&ndash;12", see:"Badami Cave Temples (6th-century rock-cut Hindu/Jain temples over Agastya Lake), ~1.5&ndash;2 hrs. Pattadakal and Aihole are ~30&ndash;45 min further if there's spare time &mdash; don't force it given Day 11's drive length.", stay:"The Heritage Resort, Badami (4.0&#9733;, garden + pool) or Grand Heritage (4.4&#9733;)."}
+];
+
+/* ---------------- Render day cards ---------------- */
+const daysList = document.getElementById('days-list');
+days.forEach(d => {
+  const card = document.createElement('div');
+  card.className = 'day-card' + (d.buffer ? ' buffer' : '');
+  card.id = 'day' + d.n;
+  card.innerHTML = `
+    <div class="day-num">${String(d.n).padStart(2,'0')}<span class="of">of 13</span></div>
+    <div class="day-body">
+      <div class="route">${d.route}</div>
+      <div class="day-meta">
+        <span class="dist">${d.dist}</span>
+        <span class="night">&rarr; ${d.night}</span>
+      </div>
+      ${d.note ? `<div class="day-note">${d.note}</div>` : ''}
+    </div>`;
+  daysList.appendChild(card);
+});
+
+/* ---------------- Render place cards ---------------- */
+const placesGrid = document.getElementById('places-grid');
+places.forEach(p => {
+  const card = document.createElement('div');
+  card.className = 'place-card';
+  card.innerHTML = `
+    <h3>${p.name}</h3>
+    <span class="span">${p.span}</span>
+    <p><strong>See:</strong> ${p.see}</p>
+    ${p.enroute ? `<p><strong>En route:</strong> ${p.enroute}</p>` : ''}
+    <p><strong>Stay:</strong> ${p.stay}</p>`;
+  placesGrid.appendChild(card);
+});
+
+/* ---------------- Map ---------------- */
+const map = L.map('map', { scrollWheelZoom:false }).setView([16.8, 75.5], 6);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  subdomains:'abcd', maxZoom:19
+}).addTo(map);
+
+function badgeIcon(html, size){
+  return L.divIcon({ html, className:'', iconSize:[size,size], iconAnchor:[size/2,size/2] });
+}
+
+// Route polyline
+const routeLatLngs = mainRoute.map(p => [p.lat, p.lon]);
+L.polyline(routeLatLngs, { color:'#f0a202', weight:3, opacity:0.9 }).addTo(map);
+
+// Spurs
+spurs.forEach(s => {
+  L.polyline([s.from, s.to], { color:'#b5533c', weight:2.4, opacity:0.85, dashArray:'6,6' }).addTo(map);
+  L.marker(s.to, { icon:badgeIcon('<div class="trip-tri"></div>', 14) })
+    .addTo(map).bindPopup(`<strong>${s.name}</strong>`);
+});
+
+// Main route markers
+mainRoute.forEach(p => {
+  let icon;
+  if(p.kind === 'start' || p.kind === 'end'){
+    icon = badgeIcon('<div class="trip-start">&#9733;</div>', 30);
+  } else if(p.kind === 'stay'){
+    icon = badgeIcon(`<div class="trip-badge">${p.day}</div>`, 26);
+  } else {
+    icon = badgeIcon('<div class="trip-dot"></div>', 10);
+  }
+  const popupText = p.kind === 'stay' ? `<strong>${p.name}</strong><br>Arrive Day ${p.day}` :
+                     (p.label ? `<strong>${p.name}</strong> &mdash; ${p.label}` : `<strong>${p.name}</strong>`);
+  L.marker([p.lat, p.lon], { icon }).addTo(map).bindPopup(popupText);
+});
+
+// Sightseeing markers
+sightseeing.forEach(s => {
+  L.marker([s.lat, s.lon], { icon:badgeIcon('<div class="trip-tri"></div>', 14) })
+    .addTo(map).bindPopup(`<strong>${s.name}</strong><br>${s.note}`);
+});
+
+map.fitBounds(routeLatLngs, { padding:[30,30] });
+</script>
+
+</body>
+</html>
